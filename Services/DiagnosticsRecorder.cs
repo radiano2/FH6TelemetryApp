@@ -80,11 +80,9 @@ public sealed class DiagnosticsRecorder : IDisposable
     {
         _lastPacketAt = DateTime.UtcNow;
 
-        // RacePosition is often 0 in FH6 even during races.
-        // Use all three signals: any one non-zero means we're in a structured event.
-        bool inRace = p.RacePosition > 0
-                   || p.LapNumber > 0
-                   || p.CurrentRaceTime > 1.0f;
+        // RacePosition is 0 in free roam and >0 in structured races.
+        // CurrentRaceTime and LapNumber are not reliable (CurrentRaceTime runs in free roam too).
+        bool inRace = p.RacePosition > 0;
 
         // ── Auto race detection (never triggers during free roam) ────────────
         if (!IsManual)
