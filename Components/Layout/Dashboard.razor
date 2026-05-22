@@ -31,10 +31,15 @@
         @if (Recorder.IsRecording)
         {
             <div class="rec-indicator">
-                <span class="rec-dot"></span> REC
+                <span class="rec-dot"></span>
+                @(Recorder.IsManual ? "REC" : "RACE REC")
                 <span class="rec-timer">@FormatDuration(DateTime.UtcNow - Recorder.ActiveSession!.StartedAt)</span>
             </div>
             <button class="hbtn hbtn-record" @onclick="EndSession">■ End Early</button>
+        }
+        else
+        {
+            <button class="hbtn hbtn-record" @onclick="StartManual">● Record</button>
         }
         <button class="hbtn hbtn-ghost" @onclick="() => _modal!.ShowHistory()">📋 History</button>
 
@@ -195,7 +200,8 @@
     }
 
     // ── Session recording ───────────────────────────────────────────────────
-    private async Task EndSession() => await Recorder.ForceEndAsync();
+    private async Task StartManual() => await Recorder.StartManualAsync();
+    private async Task EndSession()  => await Recorder.ForceEndAsync();
 
     private void OnSessionEnded()
     {

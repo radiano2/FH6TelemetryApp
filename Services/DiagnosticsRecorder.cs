@@ -4,11 +4,13 @@ using static FH6TelemetryApp.Services.SessionRepository;
 namespace FH6TelemetryApp.Services;
 
 /// <summary>
-/// Singleton that always listens to the telemetry stream and auto-detects race boundaries:
-///   START — first packet after ≥3 s of silence, or when LapNumber resets to 0/1 mid-session.
-///   END   — no packets for ≥5 s while recording (UdpListenerService already drops IsRaceOn=0).
+/// Singleton that always listens to the telemetry stream.
 ///
-/// Manual ForceEndAsync() is available as an override from the UI.
+/// RACE    — auto-starts when RacePosition > 0 (in a structured race),
+///           auto-ends when RacePosition drops back to 0 or packets stop for 5 s.
+/// FREE ROAM — never auto-starts; call StartManualAsync() from the UI button.
+///
+/// ForceEndAsync() stops any active session early from the UI.
 /// </summary>
 public sealed class DiagnosticsRecorder : IDisposable
 {
@@ -17,15 +19,17 @@ public sealed class DiagnosticsRecorder : IDisposable
 
     // ── Public state ─────────────────────────────────────────────────────────
     public bool          IsRecording   { get; private set; }
+    public bool          IsManual      { get; private set; }   // true = free-roam manual recording
     public RaceSession?  ActiveSession { get; private set; }
 
     /// Fired on the thread-pool when a session ends (auto or manual).
     public event Action? SessionEnded;
 
-    // ── Auto-detection timing ─────────────────────────────────────────────────
-    private DateTime  _lastPacketAt  = DateTime.MinValue;
-    private const double StartGapSec = 3.0;   // silence → new race starts
-    private const double EndGapSec   = 5.0;   // silence → race ended
+    // ── Race auto-detection ───────────────────────────────────────────────────
+    private DateTime _lastPacketAt   = DateTime.MinValue;
+    private bool     _prevInRace     = false;
+    // 30 s gives plenty of room for mid-race pauses; covers game crash too
+    private const double EndGapSec   = 30.0;
 
     // ── Per-lap accumulator ──────────────────────────────────────────────────
     private LapAccumulator _currentLap       = new();
@@ -52,7 +56,8 @@ public sealed class DiagnosticsRecorder : IDisposable
         _watchdogTask = RunWatchdogAsync();
     }
 
-    // ── Auto-detection watchdog ───────────────────────────────────────────────
+    // ── Watchdog — ends any active session after sustained silence ────────────
+    // Covers: game crash, alt-tab, or manual free-roam recording left running.
     private async Task RunWatchdogAsync()
     {
         try
@@ -73,38 +78,47 @@ public sealed class DiagnosticsRecorder : IDisposable
     // ── Packet handler ────────────────────────────────────────────────────────
     private void OnPacket(TelemetryPacket p)
     {
-        var now        = DateTime.UtcNow;
-        var silenceSec = (now - _lastPacketAt).TotalSeconds;
-        _lastPacketAt  = now;
+        _lastPacketAt = DateTime.UtcNow;
 
-        // Detect race start:
-        //  1. First packet ever (silence from epoch)
-        //  2. Gap ≥ StartGapSec (returned from menus / new race loaded)
-        //  3. LapNumber reset while recording (player restarted the race)
-        bool lapReset = IsRecording
-                        && _prevLapNumber > 1
-                        && p.LapNumber <= 1;
+        // RacePosition is often 0 in FH6 even during races.
+        // Use all three signals: any one non-zero means we're in a structured event.
+        bool inRace = p.RacePosition > 0
+                   || p.LapNumber > 0
+                   || p.CurrentRaceTime > 1.0f;
 
-        if (!IsRecording && (_lastPacketAt == now || silenceSec >= StartGapSec))
-            _ = StartSessionCoreAsync();
-        else if (lapReset)
+        // ── Auto race detection (never triggers during free roam) ────────────
+        if (!IsManual)
         {
-            // Race restarted — end current session and start a new one
-            _ = EndSessionCoreAsync().ContinueWith(_ => StartSessionCoreAsync());
+            if (!IsRecording && inRace && !_prevInRace)
+            {
+                // Just entered a race
+                _ = StartSessionCoreAsync(manual: false);
+            }
+            else if (IsRecording && !inRace && _prevInRace)
+            {
+                // Just left a race (crossed finish / back to free roam)
+                _ = EndSessionCoreAsync();
+            }
+            else if (IsRecording && inRace && _prevLapNumber > 1 && p.LapNumber <= 1)
+            {
+                // Player restarted the race mid-session
+                _ = EndSessionCoreAsync().ContinueWith(_ => StartSessionCoreAsync(manual: false));
+            }
         }
 
+        _prevInRace    = inRace;
         _prevLapNumber = p.LapNumber;
 
         if (!IsRecording) return;
-
         AccumulatePacket(p);
     }
 
     // ── Session lifecycle ─────────────────────────────────────────────────────
-    private async Task StartSessionCoreAsync()
+    private async Task StartSessionCoreAsync(bool manual)
     {
         if (IsRecording) return;
 
+        IsManual      = manual;
         ActiveSession = new RaceSession { StartedAt = DateTime.UtcNow };
         await _sessionRepo.InsertSessionAsync(ActiveSession);
 
@@ -115,6 +129,9 @@ public sealed class DiagnosticsRecorder : IDisposable
 
         IsRecording = true;
     }
+
+    /// <summary>Start free-roam recording manually from the UI.</summary>
+    public Task StartManualAsync() => StartSessionCoreAsync(manual: true);
 
     private async Task EndSessionCoreAsync()
     {
