@@ -32,6 +32,16 @@ public sealed class LapSnapshot
     public int   LimiterHitCount   { get; init; }
     public float AvgUpshiftRpmRatio { get; init; }
 
+    // Throttle discipline
+    public float CoastingCornerFraction { get; init; }  // fraction of cornering samples with no pedal
+
+    // Traction on corner exit
+    public float WheelspinExitFraction  { get; init; }  // fraction of corner-exit events with wheelspin
+
+    // Gear range usage
+    public int LuggingCount          { get; init; }   // samples below 35% RPM with throttle
+    public int OverRevSustainedCount { get; init; }   // samples 90-99% RPM while still accelerating
+
     public float LapTimeSeconds { get; init; }
     public int   SampleCount    { get; init; }
 }

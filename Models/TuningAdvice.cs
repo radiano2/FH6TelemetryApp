@@ -10,6 +10,8 @@ public enum AdviceCategory
     Oversteer,
     Braking,
     Gearing,
+    Traction,
+    Throttle,
     General
 }
 

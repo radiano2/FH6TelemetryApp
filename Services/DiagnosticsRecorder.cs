@@ -230,6 +230,13 @@ public sealed class DiagnosticsRecorder : IDisposable
         private byte  _prevGear;
         private float _prevRpmRatio;
         private float _lapTimeSeconds;
+        // New tracking fields
+        private int   _coastingCornerSamples;
+        private int   _luggingCount;
+        private int   _overRevSustainedCount;
+        private int   _wheelspinExitSamples;
+        private int   _cornerExitSamples;
+        private float _prevLatG;
 
         public void Feed(TelemetryPacket p)
         {
@@ -275,6 +282,29 @@ public sealed class DiagnosticsRecorder : IDisposable
             _prevGear     = p.Gear;
             _prevRpmRatio = rpmRatio;
 
+            // Coasting mid-corner: no throttle, no brake, lateral G active
+            if (latG > 0.2f && p.Accel < 10 && p.Brake < 10)
+                _coastingCornerSamples++;
+
+            // Gear lugging: below 35% RPM with throttle applied in gear 3+
+            if (rpmRatio < 0.35f && rpmRatio > 0f && p.Accel > 100 && p.Gear >= 3 && p.Speed > 10f)
+                _luggingCount++;
+
+            // Over-rev while still accelerating (90-99% RPM, not yet at limiter)
+            if (rpmRatio > 0.90f && rpmRatio < 0.99f && longG > 0.05f)
+                _overRevSustainedCount++;
+
+            // Wheelspin on corner exit: was cornering, now unwinding, heavy throttle, not gaining speed
+            bool wasCornering = _prevLatG > 0.3f;
+            bool isExiting    = latG < 0.2f;
+            if (wasCornering && isExiting)
+            {
+                _cornerExitSamples++;
+                if (p.Accel > 180 && longG < 0.15f && p.Speed > 10f)
+                    _wheelspinExitSamples++;
+            }
+            _prevLatG = latG;
+
             _lapTimeSeconds = p.CurrentLap;
         }
 
@@ -293,10 +323,14 @@ public sealed class DiagnosticsRecorder : IDisposable
             UnderSteerRatio    = _cornerSamples > 0 ? (float)_underSamples / _cornerSamples : 0f,
             OverSteerRatio     = _cornerSamples > 0 ? (float)_overSamples  / _cornerSamples : 0f,
             BrakeEfficiencyAvg = _brakeZoneSamples > 0 ? _brakeEffSum / _brakeZoneSamples : 0f,
-            LimiterHitCount    = _limiterHits,
-            AvgUpshiftRpmRatio = _upshiftCount > 0 ? _upshiftRatioSum / _upshiftCount : 0f,
-            LapTimeSeconds     = _lapTimeSeconds,
-            SampleCount        = SampleCount,
+            LimiterHitCount          = _limiterHits,
+            AvgUpshiftRpmRatio       = _upshiftCount > 0 ? _upshiftRatioSum / _upshiftCount : 0f,
+            CoastingCornerFraction   = _cornerSamples > 0 ? (float)_coastingCornerSamples / _cornerSamples : 0f,
+            WheelspinExitFraction    = _cornerExitSamples > 0 ? (float)_wheelspinExitSamples / _cornerExitSamples : 0f,
+            LuggingCount             = _luggingCount,
+            OverRevSustainedCount    = _overRevSustainedCount,
+            LapTimeSeconds           = _lapTimeSeconds,
+            SampleCount              = SampleCount,
         };
 
         private struct Stat
