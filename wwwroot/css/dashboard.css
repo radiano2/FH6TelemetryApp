@@ -525,6 +525,25 @@ body.edit-mode .rh { opacity: 1 !important; }
 .diag-mini-badge.sev-critical { background: rgba(255,71,87,0.12); color: var(--red); }
 .diag-mini-badge.sev-warning  { background: rgba(255,165,2,0.12);  color: var(--orange); }
 .diag-mini-badge.sev-info     { background: rgba(74,144,217,0.12); color: var(--blue); }
+.diag-history-info { flex: 1; min-width: 0; }
+.diag-history-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.diag-delete-btn {
+  background: none; border: none; cursor: pointer; font-size: 16px;
+  opacity: 0.45; padding: 4px 6px; border-radius: 6px; transition: opacity 0.15s, background 0.15s;
+}
+.diag-delete-btn:hover { opacity: 1; background: rgba(255,71,87,0.12); }
+
+/* Chart */
+.diag-chart-wrap { margin: 12px 0 4px; }
+.diag-chart-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.diag-chart-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.diag-chart-legend { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-secondary); }
+.dcl-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; }
+.diag-chart-svg { width: 100%; height: 160px; border-radius: var(--radius-sm); background: var(--surface2); display: block; }
+.diag-chart-loading { text-align: center; padding: 30px 0; font-size: 13px; color: var(--text-secondary); }
 
 /* edit mode outline */
 body.edit-mode .widget {

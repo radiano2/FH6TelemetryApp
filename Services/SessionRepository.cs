@@ -41,9 +41,53 @@ public sealed class SessionRepository
     public async Task<RaceSession?> GetSessionAsync(string id) =>
         await _sessions.Find(s => s.Id == id).FirstOrDefaultAsync();
 
+    // ── Delete ────────────────────────────────────────────────────────────────
+    public async Task DeleteSessionAsync(string id)
+    {
+        await _sessions.DeleteOneAsync(s => s.Id == id);
+        await _packets.DeleteManyAsync(p => p.SessionId == id);
+    }
+
     // ── Raw packets ───────────────────────────────────────────────────────────
     public async Task BulkInsertPacketsAsync(string sessionId, IEnumerable<RawPacketDocument> packets) =>
         await _packets.InsertManyAsync(packets);
+
+    /// <summary>
+    /// Returns up to <paramref name="maxPoints"/> evenly-sampled packets for charting.
+    /// Projects only the fields the chart needs to keep the payload small.
+    /// </summary>
+    public async Task<List<ChartPoint>> GetChartPointsAsync(string sessionId, int maxPoints = 300)
+    {
+        var allDocs = await _packets
+            .Find(p => p.SessionId == sessionId)
+            .SortBy(p => p.TimestampMs)
+            .Project(p => new ChartPoint(
+                p.TimestampMs,
+                p.Speed,
+                p.Accel,
+                p.Brake,
+                p.CurrentRpm,
+                p.EngineMaxRpm))
+            .ToListAsync();
+
+        if (allDocs.Count == 0) return allDocs;
+
+        // Downsample evenly
+        if (allDocs.Count <= maxPoints) return allDocs;
+        var step   = (double)allDocs.Count / maxPoints;
+        var result = new List<ChartPoint>(maxPoints);
+        for (int i = 0; i < maxPoints; i++)
+            result.Add(allDocs[(int)(i * step)]);
+        return result;
+    }
+
+    public sealed record ChartPoint(
+        uint  TimestampMs,
+        float Speed,
+        byte  Accel,
+        byte  Brake,
+        float Rpm,
+        float MaxRpm);
 
     public sealed class RawPacketDocument
     {

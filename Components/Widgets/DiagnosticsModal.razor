@@ -1,6 +1,7 @@
 @inject SessionRepository SessionRepo
 @inject IJSRuntime JS
 @using System.Text.Json
+@using static FH6TelemetryApp.Services.SessionRepository
 
 @if (_visible)
 {
@@ -14,69 +15,30 @@
                     Race Diagnostics
                 </div>
                 <div class="diag-tabs">
-                    <button class="diag-tab @(_tab == 0 ? "active" : "")" @onclick='() => _tab = 0'>Current Report</button>
-                    <button class="diag-tab @(_tab == 1 ? "active" : "")" @onclick="() => LoadHistory()">History</button>
+                    <button class="diag-tab @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Current Report</button>
+                    <button class="diag-tab @(_tab == 1 ? "active" : "")" @onclick="LoadHistory">History</button>
                 </div>
                 <button class="diag-close" @onclick="Close">✕</button>
             </div>
 
-            <!-- Tab 0: Current session report -->
+            <!-- ── Tab 0: Current session report ── -->
             @if (_tab == 0)
             {
                 @if (_session is null)
                 {
-                    <div class="diag-empty">No session data yet. Start a session to begin recording.</div>
+                    <div class="diag-empty">No session data yet. Start a race to begin recording.</div>
                 }
                 else
                 {
                     <div class="diag-body">
-                        <!-- Session summary -->
                         <div class="diag-summary">
-                            <div class="diag-stat">
-                                <span class="diag-stat-val">@_session.Laps.Count</span>
-                                <span class="diag-stat-lbl">Laps</span>
-                            </div>
-                            <div class="diag-stat">
-                                <span class="diag-stat-val">@FormatDuration(_session.Duration)</span>
-                                <span class="diag-stat-lbl">Duration</span>
-                            </div>
-                            <div class="diag-stat">
-                                <span class="diag-stat-val">@FormatLap(_session.BestLap)</span>
-                                <span class="diag-stat-lbl">Best Lap</span>
-                            </div>
-                            <div class="diag-stat">
-                                <span class="diag-stat-val">@_session.StartedAt.ToLocalTime().ToString("HH:mm")</span>
-                                <span class="diag-stat-lbl">Started</span>
-                            </div>
+                            <div class="diag-stat"><span class="diag-stat-val">@_session.Laps.Count</span><span class="diag-stat-lbl">Laps</span></div>
+                            <div class="diag-stat"><span class="diag-stat-val">@FormatDuration(_session.Duration)</span><span class="diag-stat-lbl">Duration</span></div>
+                            <div class="diag-stat"><span class="diag-stat-val">@FormatLap(_session.BestLap)</span><span class="diag-stat-lbl">Best Lap</span></div>
+                            <div class="diag-stat"><span class="diag-stat-val">@_session.StartedAt.ToLocalTime().ToString("HH:mm")</span><span class="diag-stat-lbl">Started</span></div>
                         </div>
-
-                        <!-- Advice cards -->
-                        @if (_session.Advice.Count == 0)
-                        {
-                            <div class="diag-empty" style="padding:24px 0">
-                                <span style="font-size:2em">✅</span>
-                                <div style="margin-top:8px;font-weight:700">No issues detected</div>
-                                <div style="color:var(--text-secondary);font-size:13px">Your setup looks well balanced for this session.</div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="diag-advice-list">
-                                @foreach (var a in _session.Advice)
-                                {
-                                    <div class="diag-card sev-@a.Severity.ToString().ToLower()">
-                                        <div class="diag-card-top">
-                                            <span class="diag-sev-badge">@SevIcon(a.Severity) @a.Severity</span>
-                                            <span class="diag-cat">@a.Category</span>
-                                        </div>
-                                        <div class="diag-card-msg">@a.Message</div>
-                                        <div class="diag-card-hint">💡 @a.SliderHint</div>
-                                    </div>
-                                }
-                            </div>
-                        }
+                        @RenderAdvice(_session)
                     </div>
-
                     <div class="diag-footer">
                         <button class="hbtn hbtn-ghost" @onclick="ExportJson">⬇ Export JSON</button>
                         <button class="hbtn hbtn-primary" @onclick="Close">Close</button>
@@ -84,7 +46,7 @@
                 }
             }
 
-            <!-- Tab 1: History -->
+            <!-- ── Tab 1: History ── -->
             @if (_tab == 1)
             {
                 <div class="diag-body">
@@ -97,46 +59,92 @@
                         <div class="diag-history-list">
                             @foreach (var s in _history)
                             {
-                                <div class="diag-history-row @(_session?.Id == s.Id ? "selected" : "")"
+                                <div class="diag-history-row @(_selectedHistory?.Id == s.Id ? "selected" : "")"
                                      @onclick="() => SelectSession(s)">
-                                    <div>
+                                    <div class="diag-history-info">
                                         <div class="diag-history-date">@s.StartedAt.ToLocalTime().ToString("dd MMM yyyy  HH:mm")</div>
-                                        <div class="diag-history-meta">@s.Laps.Count laps · @FormatDuration(s.Duration) · Best @FormatLap(s.BestLap)</div>
+                                        <div class="diag-history-meta">
+                                            @s.Laps.Count laps · @FormatDuration(s.Duration) · Best @FormatLap(s.BestLap)
+                                        </div>
                                     </div>
-                                    <div class="diag-history-badges">
-                                        @foreach (var sev in new[] { AdviceSeverity.Critical, AdviceSeverity.Warning, AdviceSeverity.Info })
-                                        {
-                                            var cnt = s.Advice.Count(a => a.Severity == sev);
-                                            if (cnt > 0)
+                                    <div class="diag-history-right">
+                                        <div class="diag-history-badges">
+                                            @foreach (var sev in new[] { AdviceSeverity.Critical, AdviceSeverity.Warning, AdviceSeverity.Info })
                                             {
-                                                <span class="diag-mini-badge sev-@sev.ToString().ToLower()">@SevIcon(sev) @cnt</span>
+                                                var cnt = s.Advice.Count(a => a.Severity == sev);
+                                                if (cnt > 0)
+                                                {
+                                                    <span class="diag-mini-badge sev-@sev.ToString().ToLower()">@SevIcon(sev) @cnt</span>
+                                                }
                                             }
-                                        }
+                                        </div>
+                                        <button class="diag-delete-btn" title="Delete session"
+                                                @onclick="() => DeleteSession(s)"
+                                                @onclick:stopPropagation="true">🗑</button>
                                     </div>
                                 </div>
                             }
                         </div>
 
-                        @if (_session is not null)
+                        @if (_selectedHistory is not null)
                         {
-                            <div class="diag-advice-list" style="margin-top:16px">
-                                @foreach (var a in _session.Advice)
-                                {
-                                    <div class="diag-card sev-@a.Severity.ToString().ToLower()">
-                                        <div class="diag-card-top">
-                                            <span class="diag-sev-badge">@SevIcon(a.Severity) @a.Severity</span>
-                                            <span class="diag-cat">@a.Category</span>
-                                        </div>
-                                        <div class="diag-card-msg">@a.Message</div>
-                                        <div class="diag-card-hint">💡 @a.SliderHint</div>
+                            <!-- Telemetry chart -->
+                            <div class="diag-chart-wrap">
+                                <div class="diag-chart-header">
+                                    <span class="diag-chart-title">Telemetry — @_selectedHistory.StartedAt.ToLocalTime().ToString("dd MMM HH:mm")</span>
+                                    <div class="diag-chart-legend">
+                                        <span class="dcl-dot" style="background:#00c9a7"></span>Speed
+                                        <span class="dcl-dot" style="background:#2ed573"></span>Throttle
+                                        <span class="dcl-dot" style="background:#ff4757"></span>Brake
+                                        <span class="dcl-dot" style="background:#ffa502"></span>RPM %
                                     </div>
+                                </div>
+
+                                @if (_chartLoading)
+                                {
+                                    <div class="diag-chart-loading">Loading chart…</div>
+                                }
+                                else if (_chartPoints.Count == 0)
+                                {
+                                    <div class="diag-chart-loading">No telemetry data recorded for this session.</div>
+                                }
+                                else
+                                {
+                                    <svg class="diag-chart-svg" viewBox="0 0 700 160" preserveAspectRatio="none">
+                                        <!-- Grid -->
+                                        @foreach (var pct in new[] { 25, 50, 75 })
+                                        {
+                                            var y = (140 - pct * 1.2f).ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+                                            var yl = (140 - pct * 1.2f - 2f).ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+                                            <line x1="0" y1="@y" x2="700" y2="@y" stroke="#dde6ef" stroke-width="0.5"/>
+                                            @((MarkupString)$"<text x=\"4\" y=\"{yl}\" font-size=\"7\" fill=\"#6b7f96\">{pct}%</text>")
+                                        }
+                                        <!-- Lines -->
+                                        <polyline points="@_speedPoints"    fill="none" stroke="#00c9a7" stroke-width="1.5" stroke-linejoin="round"/>
+                                        <polyline points="@_throttlePoints" fill="none" stroke="#2ed573" stroke-width="1"   stroke-linejoin="round" opacity="0.8"/>
+                                        <polyline points="@_brakePoints"    fill="none" stroke="#ff4757" stroke-width="1"   stroke-linejoin="round" opacity="0.8"/>
+                                        <polyline points="@_rpmPoints"      fill="none" stroke="#ffa502" stroke-width="1"   stroke-linejoin="round" opacity="0.7" stroke-dasharray="3 2"/>
+                                        <!-- X axis time labels -->
+                                        @for (int ti = 0; ti <= 4; ti++)
+                                        {
+                                            var x  = ti * 175;
+                                            var ts = _chartDuration * ti / 4;
+                                            @((MarkupString)$"<text x=\"{x}\" y=\"155\" font-size=\"7\" fill=\"#6b7f96\" text-anchor=\"middle\">{FormatSeconds(ts)}</text>")
+                                        }
+                                    </svg>
                                 }
                             </div>
+
+                            <!-- Advice for selected session -->
+                            @RenderAdvice(_selectedHistory)
                         }
                     }
                 </div>
-
                 <div class="diag-footer">
+                    @if (_selectedHistory is not null)
+                    {
+                        <button class="hbtn hbtn-ghost" @onclick="ExportSelectedJson">⬇ Export JSON</button>
+                    }
                     <button class="hbtn hbtn-primary" @onclick="Close">Close</button>
                 </div>
             }
@@ -146,11 +154,24 @@
 }
 
 @code {
-    private bool          _visible = false;
-    private int           _tab     = 0;
-    private RaceSession?  _session;
-    private List<RaceSession> _history = [];
+    private bool         _visible = false;
+    private int          _tab     = 0;
+    private RaceSession? _session;
 
+    // ── History state ─────────────────────────────────────────────────────────
+    private List<RaceSession> _history         = [];
+    private RaceSession?      _selectedHistory;
+
+    // ── Chart state ───────────────────────────────────────────────────────────
+    private List<ChartPoint> _chartPoints   = [];
+    private bool             _chartLoading  = false;
+    private float            _chartDuration = 0f;
+    private string           _speedPoints   = "";
+    private string           _throttlePoints = "";
+    private string           _brakePoints   = "";
+    private string           _rpmPoints     = "";
+
+    // ── Public API ────────────────────────────────────────────────────────────
     public void Show(RaceSession session)
     {
         _session = session;
@@ -166,34 +187,165 @@
         StateHasChanged();
     }
 
-    private void Close() => _visible = false;
+    private void Close()
+    {
+        _visible = false;
+        _selectedHistory = null;
+        _chartPoints.Clear();
+    }
 
+    // ── History ───────────────────────────────────────────────────────────────
     private async Task LoadHistory()
     {
-        _tab     = 1;
+        _tab             = 1;
+        _selectedHistory = null;
+        _chartPoints.Clear();
         _history = await SessionRepo.GetAllSessionsAsync();
         StateHasChanged();
     }
 
-    private void SelectSession(RaceSession s) => _session = s;
+    private async Task SelectSession(RaceSession s)
+    {
+        _selectedHistory = s;
+        _chartLoading    = true;
+        _chartPoints.Clear();
+        StateHasChanged();
 
+        _chartPoints  = await SessionRepo.GetChartPointsAsync(s.Id!, 400);
+        _chartLoading = false;
+        BuildChartPaths();
+        StateHasChanged();
+    }
+
+    private async Task DeleteSession(RaceSession s)
+    {
+        await SessionRepo.DeleteSessionAsync(s.Id!);
+        if (_selectedHistory?.Id == s.Id)
+        {
+            _selectedHistory = null;
+            _chartPoints.Clear();
+        }
+        _history.Remove(s);
+        StateHasChanged();
+    }
+
+    // ── Chart path builder ────────────────────────────────────────────────────
+    private void BuildChartPaths()
+    {
+        if (_chartPoints.Count == 0) return;
+
+        const float W = 700f, H = 140f;   // SVG drawing area (bottom 20px = labels)
+
+        var firstTs = _chartPoints[0].TimestampMs;
+        var lastTs  = _chartPoints[^1].TimestampMs;
+        var spanMs  = Math.Max(lastTs - firstTs, 1u);
+        _chartDuration = spanMs / 1000f;
+
+        float maxSpeed = _chartPoints.Max(p => p.Speed);
+        if (maxSpeed <= 0f) maxSpeed = 1f;
+
+        var speed    = new System.Text.StringBuilder();
+        var throttle = new System.Text.StringBuilder();
+        var brake    = new System.Text.StringBuilder();
+        var rpm      = new System.Text.StringBuilder();
+
+        foreach (var p in _chartPoints)
+        {
+            var x       = (p.TimestampMs - firstTs) / (float)spanMs * W;
+            var ySpeed  = H - p.Speed / maxSpeed * H;
+            var yThrottle = H - p.Accel / 255f * H;
+            var yBrake  = H - p.Brake  / 255f * H;
+            var yRpm    = H - (p.MaxRpm > 0 ? p.Rpm / p.MaxRpm : 0f) * H;
+
+            Append(speed,    x, ySpeed);
+            Append(throttle, x, yThrottle);
+            Append(brake,    x, yBrake);
+            Append(rpm,      x, yRpm);
+        }
+
+        _speedPoints    = speed.ToString();
+        _throttlePoints = throttle.ToString();
+        _brakePoints    = brake.ToString();
+        _rpmPoints      = rpm.ToString();
+    }
+
+    private static void Append(System.Text.StringBuilder sb, float x, float y)
+    {
+        if (sb.Length > 0) sb.Append(' ');
+        sb.Append(x.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+        sb.Append(',');
+        sb.Append(y.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    // ── Advice renderer (shared between tabs) ─────────────────────────────────
+    private RenderFragment RenderAdvice(RaceSession s) => __builder =>
+    {
+        if (s.Advice.Count == 0)
+        {
+            __builder.AddMarkupContent(0,
+                "<div class=\"diag-empty\" style=\"padding:24px 0\">" +
+                "<span style=\"font-size:2em\">✅</span>" +
+                "<div style=\"margin-top:8px;font-weight:700\">No issues detected</div>" +
+                "<div style=\"color:var(--text-secondary);font-size:13px\">Your setup looks well balanced.</div>" +
+                "</div>");
+        }
+        else
+        {
+            __builder.OpenElement(1, "div");
+            __builder.AddAttribute(2, "class", "diag-advice-list");
+            foreach (var a in s.Advice)
+            {
+                __builder.OpenElement(3, "div");
+                __builder.AddAttribute(4, "class", $"diag-card sev-{a.Severity.ToString().ToLower()}");
+                __builder.AddMarkupContent(5,
+                    $"<div class=\"diag-card-top\">" +
+                    $"<span class=\"diag-sev-badge\">{SevIcon(a.Severity)} {a.Severity}</span>" +
+                    $"<span class=\"diag-cat\">{a.Category}</span></div>" +
+                    $"<div class=\"diag-card-msg\">{System.Net.WebUtility.HtmlEncode(a.Message)}</div>" +
+                    $"<div class=\"diag-card-hint\">💡 {System.Net.WebUtility.HtmlEncode(a.SliderHint)}</div>");
+                __builder.CloseElement();
+            }
+            __builder.CloseElement();
+        }
+    };
+
+    // ── Export ────────────────────────────────────────────────────────────────
     private async Task ExportJson()
     {
         if (_session is null) return;
-        var json = JsonSerializer.Serialize(_session, new JsonSerializerOptions { WriteIndented = true });
-        var fileName = $"fh6-session-{_session.StartedAt:yyyy-MM-dd-HHmm}.json";
+        await DownloadSession(_session);
+    }
+
+    private async Task ExportSelectedJson()
+    {
+        if (_selectedHistory is null) return;
+        await DownloadSession(_selectedHistory);
+    }
+
+    private async Task DownloadSession(RaceSession s)
+    {
+        var json     = JsonSerializer.Serialize(s, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"fh6-session-{s.StartedAt:yyyy-MM-dd-HHmm}.json";
         await JS.InvokeVoidAsync("downloadJson", fileName, json);
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
     private static string FormatDuration(TimeSpan t) =>
         t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes:D2}m" : $"{t.Minutes}m {t.Seconds:D2}s";
 
     private static string FormatLap(float sec)
     {
         if (sec <= 0f || sec == float.MaxValue) return "--:--.---";
-        var m  = (int)(sec / 60);
-        var s  = sec - m * 60;
+        var m = (int)(sec / 60);
+        var s = sec - m * 60;
         return $"{m}:{s:00.000}";
+    }
+
+    private static string FormatSeconds(float sec)
+    {
+        var m = (int)(sec / 60);
+        var s = (int)(sec % 60);
+        return m > 0 ? $"{m}m{s:D2}s" : $"{s}s";
     }
 
     private static string SevIcon(AdviceSeverity s) => s switch
