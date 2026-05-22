@@ -1,0 +1,87 @@
+<div class="dmg-wrap">
+    <svg viewBox="0 0 160 260" width="110" height="180">
+        <rect x="42" y="18" width="76" height="224" rx="22" fill="#f4f8fb" stroke="#dde6ef" stroke-width="2"/>
+        <rect x="47" y="22"  width="66" height="52"  rx="10" fill="@_zoneFill" stroke="@_zoneStroke" stroke-width="1.5"/>
+        <rect x="52" y="74"  width="56" height="36"  rx="5"  fill="rgba(74,144,217,0.15)" stroke="rgba(74,144,217,0.3)" stroke-width="1"/>
+        <rect x="54" y="110" width="52" height="44"  rx="4"  fill="#edf2f7" stroke="#dde6ef" stroke-width="1"/>
+        <rect x="52" y="154" width="56" height="28"  rx="5"  fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.2)" stroke-width="1"/>
+        <rect x="47" y="182" width="66" height="50"  rx="10" fill="@_zoneFill" stroke="@_zoneStroke" stroke-width="1.5"/>
+        <rect x="53" y="18"  width="54" height="12"  rx="5"  fill="rgba(0,201,167,0.12)" stroke="rgba(0,201,167,0.25)" stroke-width="1"/>
+        <rect x="53" y="230" width="54" height="10"  rx="5"  fill="rgba(0,201,167,0.12)" stroke="rgba(0,201,167,0.25)" stroke-width="1"/>
+        <rect x="22"  y="112" width="24" height="74" rx="5"  fill="@_zoneFill" stroke="@_zoneStroke" stroke-width="1.5"/>
+        <rect x="114" y="112" width="24" height="74" rx="5"  fill="@_zoneFill" stroke="@_zoneStroke" stroke-width="1.5"/>
+        <rect x="18"  y="46"  width="26" height="44" rx="7"  fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+        <rect x="116" y="46"  width="26" height="44" rx="7"  fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+        <circle cx="31"  cy="68"  r="9" fill="#dde6ef"/>
+        <circle cx="129" cy="68"  r="9" fill="#dde6ef"/>
+        <rect x="18"  y="168" width="26" height="44" rx="7"  fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+        <rect x="116" y="168" width="26" height="44" rx="7"  fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+        <circle cx="31"  cy="190" r="9" fill="#dde6ef"/>
+        <circle cx="129" cy="190" r="9" fill="#dde6ef"/>
+    </svg>
+    <div class="dmg-legend">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:4px">Zones</div>
+        <div class="dmg-item"><div class="dmg-swatch" style="background:rgba(0,201,167,0.4)"></div>Intact</div>
+        <div class="dmg-item"><div class="dmg-swatch" style="background:rgba(255,221,89,0.6)"></div>Minor</div>
+        <div class="dmg-item"><div class="dmg-swatch" style="background:rgba(255,71,87,0.5)"></div>Damaged</div>
+        <div style="margin-top:12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary)">Status</div>
+        <div style="margin-top:4px;font-size:13px;font-weight:800;color:@_statusHue">@_statusText</div>
+        <div style="margin-top:6px;font-size:10px;color:var(--text-secondary)">Peak @_peakG.ToString("F0")G</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private float  _peakG      = 0f;
+    private string _zoneFill   = "rgba(0,201,167,0.18)";
+    private string _zoneStroke = "rgba(0,201,167,0.4)";
+    private string _statusText = "All OK";
+    private string _statusHue  = "var(--mint-dark)";
+
+    // Threshold above which we count as an impact (filters out normal hard braking/cornering ~2-3G)
+    private const float ImpactThresholdG = 4f;
+
+    protected override void OnParametersSet()
+    {
+        if (Packet is null) return;
+
+        // Use horizontal plane acceleration (X = lateral, Z = longitudinal) as impact proxy.
+        // AccelY is vertical and includes gravity — excluded to avoid false positives on jumps.
+        var gx = TelemetryUnits.AccelToG(Packet.AccelerationX);
+        var gz = TelemetryUnits.AccelToG(Packet.AccelerationZ);
+        var g  = MathF.Sqrt(gx * gx + gz * gz);
+
+        if (g > ImpactThresholdG && g > _peakG)
+            _peakG = g;
+
+        if (_peakG < 8f)
+        {
+            _zoneFill   = "rgba(0,201,167,0.18)";
+            _zoneStroke = "rgba(0,201,167,0.4)";
+            _statusText = "All OK";
+            _statusHue  = "var(--mint-dark)";
+        }
+        else if (_peakG < 18f)
+        {
+            _zoneFill   = "rgba(255,221,89,0.3)";
+            _zoneStroke = "rgba(255,221,89,0.6)";
+            _statusText = "Minor";
+            _statusHue  = "var(--yellow)";
+        }
+        else if (_peakG < 35f)
+        {
+            _zoneFill   = "rgba(255,165,2,0.3)";
+            _zoneStroke = "rgba(255,165,2,0.6)";
+            _statusText = "Damaged";
+            _statusHue  = "var(--orange)";
+        }
+        else
+        {
+            _zoneFill   = "rgba(255,71,87,0.3)";
+            _zoneStroke = "rgba(255,71,87,0.5)";
+            _statusText = "Severe";
+            _statusHue  = "var(--red)";
+        }
+    }
+}

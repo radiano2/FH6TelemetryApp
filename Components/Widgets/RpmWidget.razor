@@ -1,0 +1,52 @@
+<div class="gauge-wrap">
+    <svg viewBox="0 0 200 200" width="100%" style="max-width:190px;max-height:190px;overflow:visible">
+        <defs>
+            <linearGradient id="gRpm" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00c9a7"/>
+                <stop offset="65%" stop-color="#ffdd59"/>
+                <stop offset="100%" stop-color="#ff4757"/>
+            </linearGradient>
+        </defs>
+        <circle cx="100" cy="100" r="78" fill="none" stroke="#ffe2e4" stroke-width="13"
+                stroke-dasharray="82 327" stroke-dashoffset="-327" stroke-linecap="round"/>
+        <circle cx="100" cy="100" r="78" fill="none" stroke="#edf2f7" stroke-width="13"
+                stroke-dasharray="409 10000" stroke-dashoffset="-107" stroke-linecap="round"/>
+        <circle cx="100" cy="100" r="78" fill="none" stroke="url(#gRpm)" stroke-width="13"
+                stroke-dasharray="@_arc 10000" stroke-dashoffset="-107" stroke-linecap="round"
+                style="transition:stroke-dasharray 0.05s"/>
+        <line x1="100" y1="34" x2="100" y2="72"
+              stroke="#ff4757" stroke-width="3" stroke-linecap="round"
+              transform="rotate(@_needleDeg 100 100)"/>
+        <circle cx="100" cy="100" r="7" fill="#ff4757"/>
+        <circle cx="100" cy="100" r="3.5" fill="white"/>
+        <text x="100" y="116" text-anchor="middle" font-family="Segoe UI,system-ui"
+              font-size="30" font-weight="800" fill="#1a2332">@_display</text>
+        <text x="100" y="135" text-anchor="middle" font-family="Segoe UI,system-ui"
+              font-size="11" fill="#6b7f96">RPM</text>
+        <text x="163" y="168" text-anchor="middle" font-family="Segoe UI,system-ui"
+              font-size="8.5" fill="#ff4757">REDLINE</text>
+    </svg>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private static readonly float s_arcMax = 2f * MathF.PI * 78f * (270f / 360f);
+
+    private string _arc       = "0";
+    private string _needleDeg = "-135";
+    private string _display   = "0.0k";
+
+    protected override void OnParametersSet()
+    {
+        var rpm = Packet?.CurrentEngineRpm ?? 0f;
+        var max = (Packet?.EngineMaxRpm ?? 0f) is > 0f ? Packet!.EngineMaxRpm : 9000f;
+        var ratio  = Math.Clamp(rpm / max, 0f, 1f);
+        _arc       = I(ratio * s_arcMax);
+        _needleDeg = I(-135f + ratio * 270f);
+        _display   = (rpm / 1000f).ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "k";
+    }
+
+    private static string I(float v) =>
+        v.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+}

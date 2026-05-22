@@ -1,0 +1,266 @@
+@inject TelemetryBroadcaster  Broadcaster
+@inject IJSRuntime            JS
+@inject LayoutRepository      LayoutRepo
+@inject DiagnosticsRecorder   Recorder
+@implements IDisposable
+
+@using System.Text.Json
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-left">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24"><polyline points="2 12 7 2 12 12 17 2 22 12"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+            </div>
+            FH6 Telemetry
+        </div>
+        <div class="live-badge @(_isLive ? "" : "waiting")">
+            <div class="live-dot"></div>
+            @(_isLive ? "LIVE" : "WAITING")
+        </div>
+    </div>
+    <div class="header-right">
+        <button class="hbtn hbtn-ghost hbtn-unit" @onclick="ToggleUnits">
+            @(_useMph ? "mph → km/h" : "km/h → mph")
+        </button>
+        <button class="hbtn hbtn-ghost hbtn-unit" @onclick="ToggleTempUnit">
+            @(_useCelsius ? "°C → °F" : "°F → °C")
+        </button>
+
+        @if (Recorder.IsRecording)
+        {
+            <div class="rec-indicator">
+                <span class="rec-dot"></span> REC
+                <span class="rec-timer">@FormatDuration(DateTime.UtcNow - Recorder.ActiveSession!.StartedAt)</span>
+            </div>
+            <button class="hbtn hbtn-record" @onclick="EndSession">■ End Early</button>
+        }
+        <button class="hbtn hbtn-ghost" @onclick="() => _modal!.ShowHistory()">📋 History</button>
+
+        <button class="hbtn hbtn-ghost @(_editMode ? "edit-active" : "")" @onclick="ToggleEditMode">
+            &#8862; Edit Layout
+        </button>
+    </div>
+</header>
+
+<!-- DASHBOARD GRID -->
+<div class="dashboard" id="dash">
+
+    <WidgetShell Config="@_configs["w-speed"]"   Title="Speed"               Sizes="_speedSizes"   OnSizeChange="SetSize">
+        <SpeedWidget Packet="@CurrentPacket" UseMph="@_useMph" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-rpm"]"     Title="RPM"                 Sizes="_rpmSizes"     OnSizeChange="SetSize">
+        <RpmWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-gear"]"    Title="Gear"                Sizes="_gearSizes"    OnSizeChange="SetSize">
+        <GearWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-inputs"]"  Title="Inputs"              Sizes="_inputsSizes"  OnSizeChange="SetSize">
+        <InputsWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-gforce"]"  Title="G-Force"             Sizes="_gforceSizes"  OnSizeChange="SetSize">
+        <GForceWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-tires"]"   Title="Tire Temps &amp; Wear" Sizes="_tiresSizes" OnSizeChange="SetSize">
+        <TireWidget Packet="@CurrentPacket" UseCelsius="@_useCelsius" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-laps"]"    Title="Lap Times"           Sizes="_lapsSizes"    OnSizeChange="SetSize">
+        <LapTimingWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-track"]"   Title="Track Map"           Sizes="_trackSizes"   OnSizeChange="SetSize">
+        <TrackMapWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-session"]" Title="Session"             Sizes="_sessionSizes" OnSizeChange="SetSize">
+        <SessionWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-susp"]"    Title="Suspension Travel"   Sizes="_suspSizes"    OnSizeChange="SetSize">
+        <SuspensionWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+    <WidgetShell Config="@_configs["w-damage"]"  Title="Car Damage"          Sizes="_damageSizes"  OnSizeChange="SetSize">
+        <DamageWidget Packet="@CurrentPacket" />
+    </WidgetShell>
+
+</div>
+
+<!-- Diagnostics modal (rendered outside grid so it overlays everything) -->
+<DiagnosticsModal @ref="_modal" />
+
+@code {
+    // ── Size presets ────────────────────────────────────────────────────────
+    private static readonly (int Cols, int Rows)[] _speedSizes   = [(2,3),(3,4),(4,5)];
+    private static readonly (int Cols, int Rows)[] _rpmSizes     = [(2,3),(3,4),(4,5)];
+    private static readonly (int Cols, int Rows)[] _gearSizes    = [(2,3),(2,4),(3,4)];
+    private static readonly (int Cols, int Rows)[] _inputsSizes  = [(2,3),(2,4),(3,5)];
+    private static readonly (int Cols, int Rows)[] _gforceSizes  = [(2,3),(2,4),(3,4)];
+    private static readonly (int Cols, int Rows)[] _tiresSizes   = [(3,3),(4,4),(5,5)];
+    private static readonly (int Cols, int Rows)[] _lapsSizes    = [(2,3),(3,4),(4,5)];
+    private static readonly (int Cols, int Rows)[] _trackSizes   = [(2,3),(3,4),(4,5)];
+    private static readonly (int Cols, int Rows)[] _sessionSizes = [(4,2),(6,2),(8,2)];
+    private static readonly (int Cols, int Rows)[] _suspSizes    = [(3,3),(4,4),(5,4)];
+    private static readonly (int Cols, int Rows)[] _damageSizes  = [(3,3),(4,4),(5,5)];
+
+    // ── Widget layout ───────────────────────────────────────────────────────
+    private readonly Dictionary<string, WidgetConfig> _configs = new()
+    {
+        ["w-speed"]   = new("w-speed",   3, 4),
+        ["w-rpm"]     = new("w-rpm",     3, 4),
+        ["w-gear"]    = new("w-gear",    2, 4),
+        ["w-inputs"]  = new("w-inputs",  2, 4),
+        ["w-gforce"]  = new("w-gforce",  2, 4),
+        ["w-tires"]   = new("w-tires",   4, 4),
+        ["w-laps"]    = new("w-laps",    3, 4),
+        ["w-track"]   = new("w-track",   3, 4),
+        ["w-session"] = new("w-session", 6, 2),
+        ["w-susp"]    = new("w-susp",    4, 4),
+        ["w-damage"]  = new("w-damage",  4, 4),
+    };
+
+    // ── Live telemetry ──────────────────────────────────────────────────────
+    public TelemetryPacket? CurrentPacket { get; private set; }
+
+    // ── Connection status ───────────────────────────────────────────────────
+    private DateTime? _lastPacketTime;
+    private bool _isLive => _lastPacketTime.HasValue &&
+                            (DateTime.UtcNow - _lastPacketTime.Value).TotalSeconds < 2.0;
+    private PeriodicTimer? _statusTimer;
+
+    // ── Unit preferences ────────────────────────────────────────────────────
+    private bool _useMph     = false;
+    private bool _useCelsius = false;
+
+    // ── Edit mode ───────────────────────────────────────────────────────────
+    private bool _editMode = false;
+
+    // ── JS / refs ───────────────────────────────────────────────────────────
+    private DotNetObjectReference<Dashboard>? _dotNetRef;
+    private DiagnosticsModal?                 _modal;
+
+    // ── Lifecycle ───────────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        Broadcaster.PacketBroadcast += OnPacket;
+        Recorder.SessionEnded       += OnSessionEnded;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await LoadPrefsAsync();
+        await LoadLayoutAsync();
+        await JS.InvokeVoidAsync("initDashboard");
+        await JS.InvokeVoidAsync("initResizeHandles", _dotNetRef);
+
+        _statusTimer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        _ = RunStatusTimerAsync();
+    }
+
+    public void Dispose()
+    {
+        Broadcaster.PacketBroadcast -= OnPacket;
+        Recorder.SessionEnded       -= OnSessionEnded;
+        _statusTimer?.Dispose();
+        _dotNetRef?.Dispose();
+    }
+
+    // ── Status timer ────────────────────────────────────────────────────────
+    private async Task RunStatusTimerAsync()
+    {
+        try
+        {
+            while (_statusTimer != null && await _statusTimer.WaitForNextTickAsync())
+                await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    // ── Telemetry handler ───────────────────────────────────────────────────
+    private async void OnPacket(TelemetryPacket packet)
+    {
+        CurrentPacket   = packet;
+        _lastPacketTime = DateTime.UtcNow;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── Session recording ───────────────────────────────────────────────────
+    private async Task EndSession() => await Recorder.ForceEndAsync();
+
+    private void OnSessionEnded()
+    {
+        if (Recorder.ActiveSession is not null)
+            InvokeAsync(() => _modal?.Show(Recorder.ActiveSession));
+    }
+
+    // ── Size change ─────────────────────────────────────────────────────────
+    private async Task SetSize(WidgetConfig updated)
+    {
+        _configs[updated.Id] = updated;
+        await LayoutRepo.SaveAsync(_configs.Values);
+    }
+
+    [JSInvokable]
+    public async Task UpdateWidgetSize(string id, int cols, int rows)
+    {
+        if (_configs.ContainsKey(id))
+            await SetSize(new WidgetConfig(id, cols, rows));
+    }
+
+    // ── Unit toggles ────────────────────────────────────────────────────────
+    private async Task ToggleUnits()
+    {
+        _useMph = !_useMph;
+        await JS.InvokeVoidAsync("fh6SavePref", "useMph", _useMph.ToString());
+    }
+
+    private async Task ToggleTempUnit()
+    {
+        _useCelsius = !_useCelsius;
+        await JS.InvokeVoidAsync("fh6SavePref", "useCelsius", _useCelsius.ToString());
+    }
+
+    // ── Edit mode ───────────────────────────────────────────────────────────
+    private async Task ToggleEditMode()
+    {
+        _editMode = !_editMode;
+        await JS.InvokeVoidAsync("fh6SetEditMode", _editMode);
+    }
+
+    // ── Layout persistence (MongoDB) ────────────────────────────────────────
+    private async Task LoadLayoutAsync()
+    {
+        try
+        {
+            var loaded = await LayoutRepo.LoadAsync();
+            if (loaded is null) return;
+            foreach (var c in loaded)
+                if (_configs.ContainsKey(c.Id))
+                    _configs[c.Id] = c;
+            StateHasChanged();
+        }
+        catch { /* MongoDB unavailable — keep defaults */ }
+    }
+
+    // ── Prefs (still localStorage — device-local preference) ───────────────
+    private async Task LoadPrefsAsync()
+    {
+        var mph = await JS.InvokeAsync<string?>("fh6LoadPref", "useMph");
+        var cel = await JS.InvokeAsync<string?>("fh6LoadPref", "useCelsius");
+        if (bool.TryParse(mph, out var m)) _useMph     = m;
+        if (bool.TryParse(cel, out var c)) _useCelsius = c;
+    }
+
+    private static string FormatDuration(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes:D2}m" : $"{t.Minutes}m {t.Seconds:D2}s";
+}

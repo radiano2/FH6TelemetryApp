@@ -1,0 +1,40 @@
+@* Shared wrapper for every dashboard widget.
+   Renders the .widget container with dynamic col/row CSS classes,
+   the header (mint-dot title + S/M/L size buttons), child body, and resize handle. *@
+
+<div class='widget col-@Config.Cols row-@Config.Rows' id="@Config.Id">
+    <div class="widget-header">
+        <span class="widget-title"><span class="wt-dot"></span>@Title</span>
+        <div class="size-btns">
+            @foreach (var (size, label) in _labeled)
+            {
+                var s = size;
+                var active = Config.Cols == s.Cols && Config.Rows == s.Rows;
+                <button class='@(active ? "sz active" : "sz")'
+                        @onclick="() => OnSizeChange.InvokeAsync(Config with { Cols = s.Cols, Rows = s.Rows })">
+                    @label
+                </button>
+            }
+        </div>
+    </div>
+    <div class="widget-body">
+        @ChildContent
+    </div>
+    <div class="rh" data-w="@Config.Id">
+        <svg width="12" height="12" viewBox="0 0 12 12">
+            <path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+        </svg>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public WidgetConfig Config { get; set; } = null!;
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>Three size presets: S, M, L — (Cols, Rows).</summary>
+    [Parameter, EditorRequired] public (int Cols, int Rows)[] Sizes { get; set; } = [];
+    [Parameter] public EventCallback<WidgetConfig> OnSizeChange { get; set; }
+    [Parameter] public RenderFragment ChildContent { get; set; } = _ => { };
+
+    private IEnumerable<((int Cols, int Rows), string)> _labeled =>
+        Sizes.Select((s, i) => (s, i == 0 ? "S" : i == 1 ? "M" : "L"));
+}

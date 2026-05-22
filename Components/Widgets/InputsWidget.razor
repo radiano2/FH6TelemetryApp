@@ -1,0 +1,37 @@
+<div class="inputs-wrap">
+    @foreach (var bar in _bars)
+    {
+        <div class="input-col">
+            <div class="ib-track">
+                <div class="ib-fill @bar.Css" style="height:@bar.HeightPct%"></div>
+            </div>
+            <div class="ib-pct">@bar.Label2</div>
+            <div class="ib-lbl">@bar.Label</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private record Bar(string Label, string Css, float HeightPct, string Label2);
+    private Bar[] _bars = [];
+
+    protected override void OnParametersSet()
+    {
+        var p = Packet;
+        _bars =
+        [
+            Make("THR", "thr", p?.Accel),
+            Make("BRK", "brk", p?.Brake),
+            Make("CLT", "clt", p?.Clutch),
+            Make("H/B", "hbk", p?.HandBrake),
+        ];
+    }
+
+    private static Bar Make(string label, string css, byte? raw)
+    {
+        var pct = (raw ?? 0) / 255f * 100f;
+        return new Bar(label, css, pct, $"{(int)pct}%");
+    }
+}

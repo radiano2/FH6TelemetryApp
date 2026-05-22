@@ -1,0 +1,73 @@
+@* Track map — static placeholder path + dynamic car dot (Phase 7).
+   World coords (PositionX/Z) are normalized to SVG viewport as bounds accumulate. *@
+
+<div class="track-wrap">
+    <svg viewBox="0 0 260 200" width="100%" style="max-width:240px;max-height:180px">
+        @* Static decorative track — replaced by real outline once bounds stabilise *@
+        <path d="M 40 110 Q 40 35 110 32 Q 185 28 205 72 Q 225 95 215 128 Q 205 158 172 164 Q 148 170 125 158 Q 102 146 82 154 Q 63 162 52 148 Q 37 133 40 110 Z"
+              fill="none" stroke="#dde6ef" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 40 110 Q 40 35 110 32 Q 185 28 205 72 Q 225 95 215 128 Q 205 158 172 164 Q 148 170 125 158 Q 102 146 82 154 Q 63 162 52 148 Q 37 133 40 110 Z"
+              fill="none" stroke="#f4f8fb" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+        @* Sector markers *@
+        <circle cx="110" cy="32" r="5" fill="#2ed573"/>
+        <circle cx="215" cy="128" r="5" fill="#ffdd59"/>
+        <circle cx="65"  cy="158" r="5" fill="#ff6b81"/>
+        <line x1="33" y1="98" x2="47" y2="122" stroke="#1a2332" stroke-width="2.5" stroke-dasharray="4 3"/>
+        <text x="14" y="113" font-family="Segoe UI,system-ui" font-size="8.5" fill="#6b7f96" font-weight="700">S/F</text>
+        @* Dynamic car dot *@
+        <circle cx="@_carX" cy="@_carY" r="7" fill="var(--mint)"/>
+        <circle cx="@_carX" cy="@_carY" r="3.5" fill="white"/>
+        @* Position / lap overlay *@
+        <rect x="192" y="8" width="60" height="22" rx="6"
+              fill="rgba(0,201,167,0.12)" stroke="rgba(0,201,167,0.3)" stroke-width="1"/>
+        <text x="222" y="23" text-anchor="middle" font-family="Segoe UI,system-ui"
+              font-size="11" font-weight="800" fill="var(--mint-dark)">@_overlay</text>
+    </svg>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    // Accumulated world-space bounds (expand-only)
+    private float _minX = float.MaxValue, _maxX = float.MinValue;
+    private float _minZ = float.MaxValue, _maxZ = float.MinValue;
+
+    private uint   _lastTs = 0;
+    private string _carX   = "40";
+    private string _carY   = "110";
+    private string _overlay = "P?  L?";
+
+    private const float Pad = 20f, W = 260f, H = 200f;
+    private const float MinRange = 200f; // world-unit minimum span before normalising
+
+    protected override void OnParametersSet()
+    {
+        if (Packet is null || Packet.TimestampMS == _lastTs) return;
+        _lastTs = Packet.TimestampMS;
+
+        var x = Packet.PositionX;
+        var z = Packet.PositionZ;
+
+        // Expand bounds
+        if (x < _minX) _minX = x;
+        if (x > _maxX) _maxX = x;
+        if (z < _minZ) _minZ = z;
+        if (z > _maxZ) _maxZ = z;
+
+        var rangeX = Math.Max(_maxX - _minX, MinRange);
+        var rangeZ = Math.Max(_maxZ - _minZ, MinRange);
+
+        var sx = Pad + (x - _minX) / rangeX * (W - 2 * Pad);
+        var sy = Pad + (z - _minZ) / rangeZ * (H - 2 * Pad);
+
+        _carX = I(sx);
+        _carY = I(sy);
+
+        var pos = Packet.RacePosition > 0 ? $"P{Packet.RacePosition}" : "P?";
+        var lap = Packet.LapNumber > 0    ? $"L{Packet.LapNumber}"    : "L?";
+        _overlay = $"{pos}  {lap}";
+    }
+
+    private static string I(float v) =>
+        v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}

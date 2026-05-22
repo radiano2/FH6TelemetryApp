@@ -1,0 +1,30 @@
+<div class="session-grid">
+    <div class="stat-card">
+        <div class="stat-val" style="color:var(--mint)">@_pos</div>
+        <div class="stat-lbl">Position</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">@_lap</div>
+        <div class="stat-lbl">Lap</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-val">@_fuel</div>
+        <div class="stat-lbl">Fuel</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private string _pos  = "--";
+    private string _lap  = "--";
+    private string _fuel = "--%";
+
+    protected override void OnParametersSet()
+    {
+        var p = Packet;
+        _pos  = p?.RacePosition is > 0 ? $"P{p.RacePosition}" : "--";
+        _lap  = p?.LapNumber    is > 0 ? p.LapNumber.ToString() : "--";
+        _fuel = p != null ? $"{(int)(p.Fuel * 100f)}%" : "--%";
+    }
+}

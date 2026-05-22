@@ -1,0 +1,39 @@
+<div class="gear-display">
+    <div class="shift-lights">
+        @for (int i = 0; i < 8; i++)
+        {
+            <div class="@ShiftClass(i)"></div>
+        }
+    </div>
+    <div class="gear-number">@_gearLabel</div>
+    <div style="font-size:11px;font-weight:600;color:var(--text-secondary)">@_subLabel</div>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private string _gearLabel = "N";
+    private string _subLabel  = "NEUTRAL";
+    private float  _ratio     = 0f;
+
+    protected override void OnParametersSet()
+    {
+        var gear = Packet?.Gear ?? 255;
+        if (gear == 0)         { _gearLabel = "R"; _subLabel = "REVERSE"; }
+        else if (gear == 255)  { _gearLabel = "N"; _subLabel = "NEUTRAL"; }
+        else                   { _gearLabel = gear.ToString(); _subLabel = "DRIVE"; }
+
+        var rpm = Packet?.CurrentEngineRpm ?? 0f;
+        var max = (Packet?.EngineMaxRpm ?? 0f) is > 0f ? Packet!.EngineMaxRpm : 9000f;
+        _ratio  = Math.Clamp(rpm / max, 0f, 1f);
+    }
+
+    private string ShiftClass(int i)
+    {
+        if (_ratio < (i + 1) / 8f) return "sl";
+        var color = i < 3 ? "green" : i < 6 ? "yellow" : "red";
+        // Lights 6–7 flash when above 94% of redline
+        var flash = i >= 6 && _ratio > 0.94f ? " flash" : "";
+        return $"sl {color}{flash}";
+    }
+}

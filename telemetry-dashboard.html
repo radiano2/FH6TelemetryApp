@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FH6 Telemetry Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #edf2f7;
+      --surface: #ffffff;
+      --surface2: #f4f8fb;
+      --mint: #00c9a7;
+      --mint-light: #3ddfc7;
+      --mint-dark: #009e84;
+      --mint-glow: rgba(0,201,167,0.12);
+      --text: #1a2332;
+      --text-secondary: #6b7f96;
+      --border: #dde6ef;
+      --red: #ff4757;
+      --orange: #ffa502;
+      --yellow: #ffdd59;
+      --blue: #4a90d9;
+      --green: #2ed573;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow: 0 2px 14px rgba(0,40,80,0.07);
+      --shadow-hover: 0 8px 36px rgba(0,40,80,0.12);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 10px rgba(0,40,80,0.06);
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.4px;
+      color: var(--text);
+    }
+    .logo-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--mint), var(--mint-dark));
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon svg { width: 18px; height: 18px; fill: none; stroke: white; stroke-width: 2; stroke-linecap: round; }
+
+    .live-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(0,201,167,0.10);
+      border: 1px solid rgba(0,201,167,0.28);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 11px; font-weight: 700;
+      color: var(--mint-dark);
+      letter-spacing: 0.5px;
+    }
+    .live-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--mint);
+      animation: livePulse 1.8s infinite;
+    }
+    @keyframes livePulse {
+      0%,100%{opacity:1;transform:scale(1)}
+      50%{opacity:0.4;transform:scale(0.75)}
+    }
+
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .hbtn {
+      padding: 7px 15px;
+      border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none;
+      transition: all 0.15s;
+    }
+    .hbtn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .hbtn-ghost:hover { background: var(--surface2); }
+    .hbtn-primary { background: var(--mint); color: white; }
+    .hbtn-primary:hover { background: var(--mint-dark); }
+    .hbtn.edit-active {
+      background: #fff7e6;
+      border-color: var(--orange);
+      color: #c67a00;
+    }
+
+    /* ── DASHBOARD GRID ── */
+    .dashboard {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      grid-auto-rows: 64px;
+      gap: 14px;
+      max-width: 1920px;
+      margin: 0 auto;
+    }
+
+    /* ── WIDGET ── */
+    .widget {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+      min-width: 0; min-height: 0;
+    }
+    .widget:hover { box-shadow: var(--shadow-hover); }
+    /* Mint accent top bar */
+    .widget::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: linear-gradient(90deg, var(--mint), var(--mint-light));
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+      z-index: 1;
+    }
+
+    .widget-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 14px 6px;
+      flex-shrink: 0;
+    }
+    .widget-title {
+      font-size: 10.5px; font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      color: var(--text-secondary);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .wt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); }
+
+    .size-btns { display: flex; gap: 3px; }
+    .sz {
+      width: 26px; height: 18px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface2);
+      cursor: pointer;
+      font-size: 9px; font-weight: 700;
+      color: var(--text-secondary);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.12s;
+    }
+    .sz:hover, .sz.active { background: var(--mint); border-color: var(--mint); color: white; }
+
+    .widget-body {
+      flex: 1;
+      padding: 4px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Resize handle */
+    .rh {
+      position: absolute;
+      bottom: 3px; right: 3px;
+      width: 22px; height: 22px;
+      cursor: se-resize;
+      display: flex; align-items: flex-end; justify-content: flex-end;
+      padding: 3px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 10;
+    }
+    .widget:hover .rh { opacity: 1; }
+    body.edit-mode .rh { opacity: 1 !important; }
+
+    /* Grid col/row spans */
+    .col-2{grid-column:span 2} .col-3{grid-column:span 3} .col-4{grid-column:span 4}
+    .col-5{grid-column:span 5} .col-6{grid-column:span 6} .col-8{grid-column:span 8}
+    .col-12{grid-column:span 12}
+    .row-2{grid-row:span 2} .row-3{grid-row:span 3} .row-4{grid-row:span 4}
+    .row-5{grid-row:span 5} .row-6{grid-row:span 6} .row-7{grid-row:span 7}
+
+    /* ── GAUGE ── */
+    .gauge-wrap {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+
+    /* ── GEAR ── */
+    .gear-display {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px;
+    }
+    .gear-number {
+      font-size: 5.5em; font-weight: 900;
+      color: var(--text);
+      letter-spacing: -4px; line-height: 0.9;
+    }
+    .shift-lights { display: flex; gap: 5px; }
+    .sl {
+      width: 16px; height: 9px;
+      border-radius: 3px;
+      background: var(--border);
+      transition: background 0.07s, box-shadow 0.07s;
+    }
+    .sl.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .sl.yellow { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+    .sl.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    .sl.flash { animation: slFlash 0.14s infinite; }
+    @keyframes slFlash { 0%,100%{opacity:1}50%{opacity:0.15} }
+
+    /* ── INPUTS ── */
+    .inputs-wrap {
+      flex: 1;
+      display: flex; gap: 10px; justify-content: center; align-items: flex-end;
+    }
+    .input-col {
+      flex: 1; max-width: 56px;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+    }
+    .ib-track {
+      width: 38px; flex: 1; min-height: 60px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      position: relative; overflow: hidden;
+    }
+    .ib-fill {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      border-radius: 6px;
+      transition: height 0.07s;
+    }
+    .ib-fill.thr { background: linear-gradient(to top, var(--mint-dark), var(--mint-light)); }
+    .ib-fill.brk { background: linear-gradient(to top, #c0392b, var(--red)); }
+    .ib-fill.clt { background: linear-gradient(to top, #2980b9, var(--blue)); }
+    .ib-fill.hbk { background: linear-gradient(to top, #d68910, var(--orange)); }
+    .ib-pct { font-size: 12px; font-weight: 700; color: var(--text); }
+    .ib-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); }
+
+    /* ── G-FORCE ── */
+    .gf-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+    /* ── TIRES ── */
+    .tires-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+    }
+    .tire-cell {
+      border-radius: var(--radius-sm);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 2px; padding: 8px;
+      transition: background 0.4s;
+    }
+    .tire-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; color: rgba(255,255,255,0.65); }
+    .tire-temp { font-size: 1.35em; font-weight: 800; color: white; }
+    .tire-wear { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.75); }
+
+    /* ── LAP TIMES ── */
+    .lap-list { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+    .lap-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .lap-lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+    .lap-val { font-size: 1.15em; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pos { color: var(--mint-dark); }
+    .neg { color: var(--red); }
+
+    /* ── TRACK MAP ── */
+    .track-wrap { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+    /* ── SESSION ── */
+    .session-grid {
+      flex: 1;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px; text-align: center;
+    }
+    .stat-val { font-size: 1.75em; font-weight: 800; letter-spacing: -1px; }
+    .stat-lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* ── SUSPENSION ── */
+    .susp-grid {
+      flex: 1;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px;
+    }
+    .susp-cell { display: flex; flex-direction: column; gap: 5px; }
+    .susp-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-secondary); }
+    .susp-track {
+      height: 11px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; position: relative; overflow: hidden;
+    }
+    .susp-fill {
+      position: absolute; top: 0; height: 100%;
+      border-radius: 5px; transition: left 0.08s, width 0.08s;
+    }
+    .susp-val { font-size: 12px; font-weight: 700; color: var(--text); }
+
+    /* ── DAMAGE ── */
+    .dmg-wrap { flex: 1; display: flex; align-items: center; justify-content: center; gap: 20px; }
+    .dmg-legend { display: flex; flex-direction: column; gap: 8px; }
+    .dmg-item { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; }
+    .dmg-swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+    /* edit mode outline */
+    body.edit-mode .widget {
+      outline: 2px dashed rgba(0,201,167,0.5);
+      outline-offset: -2px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><polyline points="2 12 7 2 12 12 17 2 22 12"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+      </div>
+      FH6 Telemetry
+    </div>
+    <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+  </div>
+  <div class="header-right">
+    <button class="hbtn hbtn-ghost" id="editBtn">⊞ Edit Layout</button>
+    <button class="hbtn hbtn-primary">⚙ Settings</button>
+  </div>
+</header>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dash">
+
+  <!-- ① SPEED -->
+  <div class="widget col-3 row-4" id="w-speed">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Speed</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-speed" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-speed" data-c="3" data-r="4">M</button>
+        <button class="sz" data-w="w-speed" data-c="4" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 200 200" width="100%" style="max-width:190px;max-height:190px;overflow:visible">
+          <defs>
+            <linearGradient id="gSpeed" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#00c9a7"/>
+              <stop offset="75%" stop-color="#00e5cc"/>
+              <stop offset="100%" stop-color="#ff4757"/>
+            </linearGradient>
+          </defs>
+          <!-- bg arc -->
+          <circle cx="100" cy="100" r="78" fill="none" stroke="#edf2f7" stroke-width="13"
+            stroke-dasharray="409 10000" stroke-dashoffset="-107" stroke-linecap="round"/>
+          <!-- value arc -->
+          <circle id="sarc" cx="100" cy="100" r="78" fill="none" stroke="url(#gSpeed)" stroke-width="13"
+            stroke-dasharray="0 10000" stroke-dashoffset="-107" stroke-linecap="round"
+            style="transition:stroke-dasharray 0.05s"/>
+          <!-- needle -->
+          <line id="sneedle" x1="100" y1="34" x2="100" y2="72"
+            stroke="var(--mint)" stroke-width="3" stroke-linecap="round"
+            transform="rotate(-135 100 100)"/>
+          <circle cx="100" cy="100" r="7" fill="var(--mint)"/>
+          <circle cx="100" cy="100" r="3.5" fill="white"/>
+          <!-- value text -->
+          <text id="sval" x="100" y="118" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="38" font-weight="800" fill="#1a2332">0</text>
+          <text x="100" y="137" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="12" fill="#6b7f96">km/h</text>
+          <!-- scale labels -->
+          <text x="28" y="160" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="9" fill="#aaa">0</text>
+          <text x="172" y="160" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="9" fill="#aaa">300</text>
+        </svg>
+      </div>
+    </div>
+    <div class="rh" data-w="w-speed"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ② RPM -->
+  <div class="widget col-3 row-4" id="w-rpm">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>RPM</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-rpm" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-rpm" data-c="3" data-r="4">M</button>
+        <button class="sz" data-w="w-rpm" data-c="4" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 200 200" width="100%" style="max-width:190px;max-height:190px;overflow:visible">
+          <defs>
+            <linearGradient id="gRpm" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#00c9a7"/>
+              <stop offset="65%" stop-color="#ffdd59"/>
+              <stop offset="100%" stop-color="#ff4757"/>
+            </linearGradient>
+          </defs>
+          <!-- redline zone -->
+          <circle cx="100" cy="100" r="78" fill="none" stroke="#ffe2e4" stroke-width="13"
+            stroke-dasharray="82 327" stroke-dashoffset="-327" stroke-linecap="round"/>
+          <!-- bg arc -->
+          <circle cx="100" cy="100" r="78" fill="none" stroke="#edf2f7" stroke-width="13"
+            stroke-dasharray="409 10000" stroke-dashoffset="-107" stroke-linecap="round"/>
+          <!-- value arc -->
+          <circle id="rarc" cx="100" cy="100" r="78" fill="none" stroke="url(#gRpm)" stroke-width="13"
+            stroke-dasharray="0 10000" stroke-dashoffset="-107" stroke-linecap="round"
+            style="transition:stroke-dasharray 0.05s"/>
+          <!-- needle -->
+          <line id="rneedle" x1="100" y1="34" x2="100" y2="72"
+            stroke="#ff4757" stroke-width="3" stroke-linecap="round"
+            transform="rotate(-135 100 100)"/>
+          <circle cx="100" cy="100" r="7" fill="#ff4757"/>
+          <circle cx="100" cy="100" r="3.5" fill="white"/>
+          <text id="rval" x="100" y="116" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="30" font-weight="800" fill="#1a2332">0.0k</text>
+          <text x="100" y="135" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="11" fill="#6b7f96">RPM</text>
+          <text x="163" y="168" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#ff4757">REDLINE</text>
+        </svg>
+      </div>
+    </div>
+    <div class="rh" data-w="w-rpm"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ③ GEAR -->
+  <div class="widget col-2 row-4" id="w-gear">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Gear</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-gear" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-gear" data-c="2" data-r="4">M</button>
+        <button class="sz" data-w="w-gear" data-c="3" data-r="4">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="gear-display">
+        <div class="shift-lights" id="sll">
+          <div class="sl"></div><div class="sl"></div><div class="sl"></div>
+          <div class="sl"></div><div class="sl"></div><div class="sl"></div>
+          <div class="sl"></div><div class="sl"></div>
+        </div>
+        <div class="gear-number" id="gval">3</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary)" id="gear-sub">DRIVE</div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-gear"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ④ INPUTS -->
+  <div class="widget col-2 row-4" id="w-inputs">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Inputs</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-inputs" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-inputs" data-c="2" data-r="4">M</button>
+        <button class="sz" data-w="w-inputs" data-c="3" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="inputs-wrap">
+        <div class="input-col">
+          <div class="ib-track"><div class="ib-fill thr" id="ib-thr" style="height:0%"></div></div>
+          <div class="ib-pct" id="ip-thr">0%</div>
+          <div class="ib-lbl">THR</div>
+        </div>
+        <div class="input-col">
+          <div class="ib-track"><div class="ib-fill brk" id="ib-brk" style="height:0%"></div></div>
+          <div class="ib-pct" id="ip-brk">0%</div>
+          <div class="ib-lbl">BRK</div>
+        </div>
+        <div class="input-col">
+          <div class="ib-track"><div class="ib-fill clt" id="ib-clt" style="height:0%"></div></div>
+          <div class="ib-pct" id="ip-clt">0%</div>
+          <div class="ib-lbl">CLT</div>
+        </div>
+        <div class="input-col">
+          <div class="ib-track"><div class="ib-fill hbk" id="ib-hbk" style="height:0%"></div></div>
+          <div class="ib-pct" id="ip-hbk">0%</div>
+          <div class="ib-lbl">H/B</div>
+        </div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-inputs"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑤ G-FORCE -->
+  <div class="widget col-2 row-4" id="w-gforce">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>G-Force</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-gforce" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-gforce" data-c="2" data-r="4">M</button>
+        <button class="sz" data-w="w-gforce" data-c="3" data-r="4">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="gf-wrap">
+        <svg viewBox="0 0 160 160" width="100%" style="max-width:148px;max-height:148px">
+          <!-- rings -->
+          <circle cx="80" cy="80" r="70" fill="none" stroke="#edf2f7" stroke-width="1.5"/>
+          <circle cx="80" cy="80" r="46" fill="none" stroke="#edf2f7" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <circle cx="80" cy="80" r="23" fill="none" stroke="#edf2f7" stroke-width="1.5" stroke-dasharray="3 4"/>
+          <!-- cross -->
+          <line x1="10" y1="80" x2="150" y2="80" stroke="#edf2f7" stroke-width="1"/>
+          <line x1="80" y1="10" x2="80" y2="150" stroke="#edf2f7" stroke-width="1"/>
+          <!-- labels -->
+          <text x="80" y="6" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#c5d0db">3G</text>
+          <text x="80" y="29" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#c5d0db">2G</text>
+          <text x="80" y="52" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#c5d0db">1G</text>
+          <!-- trail -->
+          <polyline id="gtrail" points="80,80" fill="none" stroke="rgba(0,201,167,0.25)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- dot -->
+          <circle id="gdot" cx="80" cy="80" r="8" fill="var(--mint)" opacity="0.9"/>
+          <circle id="gdot2" cx="80" cy="80" r="4" fill="white"/>
+        </svg>
+      </div>
+    </div>
+    <div class="rh" data-w="w-gforce"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑥ TIRE TEMPS -->
+  <div class="widget col-4 row-4" id="w-tires">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Tire Temps & Wear</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-tires" data-c="3" data-r="3">S</button>
+        <button class="sz active" data-w="w-tires" data-c="4" data-r="4">M</button>
+        <button class="sz" data-w="w-tires" data-c="5" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="tires-grid">
+        <div class="tire-cell" id="tc-fl">
+          <div class="tire-lbl">FL</div>
+          <div class="tire-temp" id="tt-fl">85°</div>
+          <div class="tire-wear" id="tw-fl">92%</div>
+        </div>
+        <div class="tire-cell" id="tc-fr">
+          <div class="tire-lbl">FR</div>
+          <div class="tire-temp" id="tt-fr">87°</div>
+          <div class="tire-wear" id="tw-fr">91%</div>
+        </div>
+        <div class="tire-cell" id="tc-rl">
+          <div class="tire-lbl">RL</div>
+          <div class="tire-temp" id="tt-rl">82°</div>
+          <div class="tire-wear" id="tw-rl">88%</div>
+        </div>
+        <div class="tire-cell" id="tc-rr">
+          <div class="tire-lbl">RR</div>
+          <div class="tire-temp" id="tt-rr">84°</div>
+          <div class="tire-wear" id="tw-rr">89%</div>
+        </div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-tires"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑦ LAP TIMES -->
+  <div class="widget col-3 row-4" id="w-laps">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Lap Times</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-laps" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-laps" data-c="3" data-r="4">M</button>
+        <button class="sz" data-w="w-laps" data-c="4" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="lap-list">
+        <div class="lap-row">
+          <span class="lap-lbl">Current</span>
+          <span class="lap-val" id="lc">1:23.456</span>
+        </div>
+        <div class="lap-row">
+          <span class="lap-lbl">Best</span>
+          <span class="lap-val pos">1:22.891</span>
+        </div>
+        <div class="lap-row">
+          <span class="lap-lbl">Last</span>
+          <span class="lap-val">1:23.128</span>
+        </div>
+        <div class="lap-row">
+          <span class="lap-lbl">Δ Best</span>
+          <span class="lap-val neg" id="ldelta">+0.237</span>
+        </div>
+        <div class="lap-row">
+          <span class="lap-lbl">Sectors</span>
+          <span class="lap-val" style="font-size:0.9em" id="lsec">28.1 / 31.4 / 23.9</span>
+        </div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-laps"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑧ TRACK MAP -->
+  <div class="widget col-3 row-4" id="w-track">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Track Map</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-track" data-c="2" data-r="3">S</button>
+        <button class="sz active" data-w="w-track" data-c="3" data-r="4">M</button>
+        <button class="sz" data-w="w-track" data-c="4" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="track-wrap">
+        <svg viewBox="0 0 260 200" width="100%" style="max-width:240px;max-height:180px">
+          <!-- track outline shadow -->
+          <path d="M 40 110 Q 40 35 110 32 Q 185 28 205 72 Q 225 95 215 128 Q 205 158 172 164 Q 148 170 125 158 Q 102 146 82 154 Q 63 162 52 148 Q 37 133 40 110 Z"
+            fill="none" stroke="#dde6ef" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- track surface -->
+          <path d="M 40 110 Q 40 35 110 32 Q 185 28 205 72 Q 225 95 215 128 Q 205 158 172 164 Q 148 170 125 158 Q 102 146 82 154 Q 63 162 52 148 Q 37 133 40 110 Z"
+            fill="none" stroke="#f4f8fb" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- sector dots -->
+          <circle cx="110" cy="32" r="5" fill="#2ed573"/>
+          <circle cx="215" cy="128" r="5" fill="#ffdd59"/>
+          <circle cx="65" cy="158" r="5" fill="#ff6b81"/>
+          <!-- S/F line -->
+          <line x1="33" y1="98" x2="47" y2="122" stroke="#1a2332" stroke-width="2.5" stroke-dasharray="4 3"/>
+          <text x="14" y="113" font-family="Segoe UI,system-ui" font-size="8.5" fill="#6b7f96" font-weight="700">S/F</text>
+          <!-- car -->
+          <circle id="tcar" cx="40" cy="110" r="7" fill="var(--mint)"/>
+          <circle id="tcar2" cx="40" cy="110" r="3.5" fill="white"/>
+          <!-- position badge -->
+          <rect x="192" y="8" width="60" height="22" rx="6" fill="rgba(0,201,167,0.12)" stroke="rgba(0,201,167,0.3)" stroke-width="1"/>
+          <text x="222" y="23" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="11" font-weight="800" fill="var(--mint-dark)">P3  L4/6</text>
+        </svg>
+      </div>
+    </div>
+    <div class="rh" data-w="w-track"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑨ SESSION -->
+  <div class="widget col-6 row-2" id="w-session">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Session</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-session" data-c="4" data-r="2">S</button>
+        <button class="sz active" data-w="w-session" data-c="6" data-r="2">M</button>
+        <button class="sz" data-w="w-session" data-c="8" data-r="2">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="session-grid">
+        <div class="stat-card">
+          <div class="stat-val" style="color:var(--mint)">P3</div>
+          <div class="stat-lbl">Position</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">4 / 6</div>
+          <div class="stat-lbl">Lap</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="fuel-v">73%</div>
+          <div class="stat-lbl">Fuel</div>
+        </div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-session"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑩ SUSPENSION -->
+  <div class="widget col-4 row-4" id="w-susp">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Suspension Travel</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-susp" data-c="3" data-r="3">S</button>
+        <button class="sz active" data-w="w-susp" data-c="4" data-r="4">M</button>
+        <button class="sz" data-w="w-susp" data-c="5" data-r="4">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="susp-grid">
+        <div class="susp-cell">
+          <div class="susp-lbl">Front Left</div>
+          <div class="susp-track"><div class="susp-fill" id="sf-fl" style="left:50%;width:0%;background:linear-gradient(to right,var(--mint),var(--mint-light))"></div></div>
+          <div class="susp-val" id="sv-fl">0 mm</div>
+        </div>
+        <div class="susp-cell">
+          <div class="susp-lbl">Front Right</div>
+          <div class="susp-track"><div class="susp-fill" id="sf-fr" style="left:50%;width:0%;background:linear-gradient(to right,var(--mint),var(--mint-light))"></div></div>
+          <div class="susp-val" id="sv-fr">0 mm</div>
+        </div>
+        <div class="susp-cell">
+          <div class="susp-lbl">Rear Left</div>
+          <div class="susp-track"><div class="susp-fill" id="sf-rl" style="left:50%;width:0%;background:linear-gradient(to right,var(--mint),var(--mint-light))"></div></div>
+          <div class="susp-val" id="sv-rl">0 mm</div>
+        </div>
+        <div class="susp-cell">
+          <div class="susp-lbl">Rear Right</div>
+          <div class="susp-track"><div class="susp-fill" id="sf-rr" style="left:50%;width:0%;background:linear-gradient(to right,var(--mint),var(--mint-light))"></div></div>
+          <div class="susp-val" id="sv-rr">0 mm</div>
+        </div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-susp"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+  <!-- ⑪ CAR DAMAGE -->
+  <div class="widget col-4 row-4" id="w-damage">
+    <div class="widget-header">
+      <span class="widget-title"><span class="wt-dot"></span>Car Damage</span>
+      <div class="size-btns">
+        <button class="sz" data-w="w-damage" data-c="3" data-r="3">S</button>
+        <button class="sz active" data-w="w-damage" data-c="4" data-r="4">M</button>
+        <button class="sz" data-w="w-damage" data-c="5" data-r="5">L</button>
+      </div>
+    </div>
+    <div class="widget-body">
+      <div class="dmg-wrap">
+        <svg viewBox="0 0 160 260" width="110" height="180">
+          <!-- Body -->
+          <rect x="42" y="18" width="76" height="224" rx="22" fill="#f4f8fb" stroke="#dde6ef" stroke-width="2"/>
+          <!-- Hood -->
+          <rect id="dz-hood" x="47" y="22" width="66" height="52" rx="10" fill="rgba(0,201,167,0.18)" stroke="rgba(0,201,167,0.4)" stroke-width="1.5"/>
+          <!-- Windshield -->
+          <rect x="52" y="74" width="56" height="36" rx="5" fill="rgba(74,144,217,0.15)" stroke="rgba(74,144,217,0.3)" stroke-width="1"/>
+          <!-- Roof -->
+          <rect x="54" y="110" width="52" height="44" rx="4" fill="#edf2f7" stroke="#dde6ef" stroke-width="1"/>
+          <!-- Rear window -->
+          <rect x="52" y="154" width="56" height="28" rx="5" fill="rgba(74,144,217,0.12)" stroke="rgba(74,144,217,0.2)" stroke-width="1"/>
+          <!-- Trunk -->
+          <rect id="dz-trunk" x="47" y="182" width="66" height="50" rx="10" fill="rgba(0,201,167,0.18)" stroke="rgba(0,201,167,0.4)" stroke-width="1.5"/>
+          <!-- Front bumper -->
+          <rect x="53" y="18" width="54" height="12" rx="5" fill="rgba(0,201,167,0.12)" stroke="rgba(0,201,167,0.25)" stroke-width="1"/>
+          <!-- Rear bumper -->
+          <rect x="53" y="230" width="54" height="10" rx="5" fill="rgba(0,201,167,0.12)" stroke="rgba(0,201,167,0.25)" stroke-width="1"/>
+          <!-- L door (damaged) -->
+          <rect id="dz-ldoor" x="22" y="112" width="24" height="74" rx="5" fill="rgba(255,71,87,0.22)" stroke="rgba(255,71,87,0.5)" stroke-width="1.5"/>
+          <text x="34" y="153" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="12" font-weight="700" fill="#ff4757">!</text>
+          <!-- R door (ok) -->
+          <rect id="dz-rdoor" x="114" y="112" width="24" height="74" rx="5" fill="rgba(0,201,167,0.18)" stroke="rgba(0,201,167,0.4)" stroke-width="1.5"/>
+          <!-- Front wheels -->
+          <rect x="18" y="46" width="26" height="44" rx="7" fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+          <rect x="116" y="46" width="26" height="44" rx="7" fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+          <circle cx="31" cy="68" r="9" fill="#dde6ef"/>
+          <circle cx="129" cy="68" r="9" fill="#dde6ef"/>
+          <!-- Rear wheels -->
+          <rect x="18" y="168" width="26" height="44" rx="7" fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+          <rect x="116" y="168" width="26" height="44" rx="7" fill="#edf2f7" stroke="#c5d0db" stroke-width="1.5"/>
+          <circle cx="31" cy="190" r="9" fill="#dde6ef"/>
+          <circle cx="129" cy="190" r="9" fill="#dde6ef"/>
+        </svg>
+        <div class="dmg-legend">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:4px">Zones</div>
+          <div class="dmg-item"><div class="dmg-swatch" style="background:rgba(0,201,167,0.4)"></div>Intact</div>
+          <div class="dmg-item"><div class="dmg-swatch" style="background:rgba(255,221,89,0.6)"></div>Minor</div>
+          <div class="dmg-item"><div class="dmg-swatch" style="background:rgba(255,71,87,0.5)"></div>Damaged</div>
+          <div style="margin-top:12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary)">Status</div>
+          <div style="margin-top:4px;font-size:13px;font-weight:800;color:var(--red)">L Door !</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary)">All others OK</div>
+        </div>
+      </div>
+    </div>
+    <div class="rh" data-w="w-damage"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M11 1L1 11M7 1L1 7M11 5L5 11" stroke="#bbb" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></div>
+  </div>
+
+</div><!-- /dashboard -->
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  SIMULATION ENGINE
+// ═══════════════════════════════════════════════════════════
+let T = 0;
+const S = {
+  speed:0, rpm:800, gear:1,
+  thr:0, brk:0, clt:0, hbk:0,
+  gx:0, gy:0,
+  tFL:85, tFR:87, tRL:82, tRR:84,
+  wFL:92, wFR:91, wRL:88, wRR:89,
+  sFL:0.5, sFR:0.5, sRL:0.5, sRR:0.5,
+  lap:83.456
+};
+
+const noise = s => Math.sin(s*2.1)*0.5 + Math.sin(s*5.3+1)*0.3 + Math.sin(s*11.7+2.5)*0.2;
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const lerp = (a,b,t) => a+(b-a)*t;
+
+const gTrail = [];
+const TRAIL_MAX = 45;
+
+function tick() {
+  T += 0.016;
+  const n = noise(T*0.25);
+  const braking = Math.sin(T*0.22+1.6) > 0.68;
+  const fast = Math.sin(T*0.12) > 0.3;
+  const corner = Math.abs(Math.sin(T*0.28));
+
+  const targetSpd = fast ? 210 + n*45 : 75 + n*25;
+  S.speed = lerp(S.speed, targetSpd, 0.035);
+  const targetRPM = clamp(700 + (S.speed/280)*7800 + noise(T)*350, 800, 8500);
+  S.rpm = lerp(S.rpm, targetRPM, 0.055);
+
+  // gear
+  const gMap = [0,30,60,100,145,195,240];
+  S.gear = gMap.findIndex(g => S.speed < g) || 7;
+  if(S.gear < 1) S.gear = 1;
+
+  S.thr = braking ? clamp(noise(T*3)*0.2,0,0.18) : clamp(0.65+noise(T)*0.35,0.28,1);
+  S.brk = braking ? clamp(0.55+noise(T*2.5)*0.45,0.15,1) : Math.max(0,noise(T*4)*0.08);
+  S.clt = Math.max(0, noise(T*5)*0.12);
+  S.hbk = corner > 0.94 ? clamp(0.7+noise(T*8)*0.3,0,1) : 0;
+
+  S.gx = lerp(S.gx, Math.sin(T*0.48)*2.2 + noise(T*1.1)*0.4, 0.09);
+  S.gy = lerp(S.gy, -Math.cos(T*0.31)*1.6 + noise(T*1.3)*0.35, 0.09);
+
+  const load = clamp(S.speed/280,0,1);
+  S.tFL = clamp(65+load*55+noise(T*0.09)*12, 55,135);
+  S.tFR = clamp(67+load*53+noise(T*0.11)*12, 55,135);
+  S.tRL = clamp(63+load*60+noise(T*0.10)*10, 55,135);
+  S.tRR = clamp(66+load*58+noise(T*0.12)*11, 55,135);
+
+  S.sFL = clamp(0.5+noise(T*2.2)*0.32, 0.05,0.95);
+  S.sFR = clamp(0.5+noise(T*2.1+1)*0.30, 0.05,0.95);
+  S.sRL = clamp(0.5+noise(T*1.9+2)*0.34, 0.05,0.95);
+  S.sRR = clamp(0.5+noise(T*2.3+3)*0.28, 0.05,0.95);
+
+  S.lap += 0.016;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════
+const CIRC = 2*Math.PI*78;  // ~490
+const ARC  = CIRC * (270/360); // usable arc
+const ARC_OFFSET_DEG = -107; // starting offset
+
+function setGauge(arcId, needleId, val, maxVal) {
+  const ratio = clamp(val/maxVal,0,1);
+  const used = ratio * ARC;
+  document.getElementById(arcId).style.strokeDasharray = `${used} 10000`;
+  const angle = -135 + ratio*270;
+  document.getElementById(needleId).setAttribute('transform',`rotate(${angle} 100 100)`);
+}
+
+function tireColor(t) {
+  if(t<65) return '#4a90d9';
+  if(t<78) return '#00b8a0';
+  if(t<95) return '#00c9a7';
+  if(t<112) return '#ffa502';
+  return '#ff4757';
+}
+
+function fmtLap(s) {
+  const m=Math.floor(s/60), sc=(s%60).toFixed(3);
+  return `${m}:${sc.padStart(6,'0')}`;
+}
+
+function renderGForce() {
+  const cx=80,cy=80,scale=23;
+  const x=clamp(cx+S.gx*scale,8,152);
+  const y=clamp(cy-S.gy*scale,8,152);
+  gTrail.push({x,y});
+  if(gTrail.length>TRAIL_MAX) gTrail.shift();
+  document.getElementById('gdot').setAttribute('cx',x);
+  document.getElementById('gdot').setAttribute('cy',y);
+  document.getElementById('gdot2').setAttribute('cx',x);
+  document.getElementById('gdot2').setAttribute('cy',y);
+  if(gTrail.length>1)
+    document.getElementById('gtrail').setAttribute('points', gTrail.map(p=>`${p.x},${p.y}`).join(' '));
+}
+
+function renderTrack() {
+  // Parametric car position along ellipse approximating track shape
+  const ang = (T*0.14)%(Math.PI*2);
+  const tx = 127 + 85*Math.cos(ang);
+  const ty = 95  + 55*Math.sin(ang);
+  document.getElementById('tcar').setAttribute('cx',tx);
+  document.getElementById('tcar').setAttribute('cy',ty);
+  document.getElementById('tcar2').setAttribute('cx',tx);
+  document.getElementById('tcar2').setAttribute('cy',ty);
+}
+
+function renderShiftLights() {
+  const ratio = S.rpm/8500;
+  document.querySelectorAll('.sl').forEach((el,i) => {
+    el.className = 'sl';
+    const thr = (i+1)/8;
+    if(ratio>=thr) {
+      if(i<3) el.classList.add('green');
+      else if(i<6) el.classList.add('yellow');
+      else { el.classList.add('red'); if(ratio>0.94) el.classList.add('flash'); }
+    }
+  });
+}
+
+function renderSusp(fillId, valId, v) {
+  const mm = Math.round((v-0.5)*42);
+  const el = document.getElementById(fillId);
+  const vEl = document.getElementById(valId);
+  const pct = Math.abs(v-0.5)*100;
+  if(v >= 0.5) {
+    el.style.left = '50%';
+    el.style.width = pct+'%';
+    el.style.background = 'linear-gradient(to right,var(--mint),var(--mint-light))';
+  } else {
+    el.style.left = (v*100)+'%';
+    el.style.width = pct+'%';
+    el.style.background = 'linear-gradient(to left,var(--orange),#ffd080)';
+  }
+  vEl.textContent = (mm>=0?'+':'')+mm+' mm';
+}
+
+function frame() {
+  tick();
+
+  // Gauges
+  setGauge('sarc','sneedle',S.speed,300);
+  setGauge('rarc','rneedle',S.rpm,9000);
+  document.getElementById('sval').textContent = Math.round(S.speed);
+  document.getElementById('rval').textContent = (S.rpm/1000).toFixed(1)+'k';
+
+  // Gear
+  document.getElementById('gval').textContent = S.gear;
+
+  // Inputs
+  const setBar = (f,p,v) => {
+    document.getElementById(f).style.height=(v*100)+'%';
+    document.getElementById(p).textContent=Math.round(v*100)+'%';
+  };
+  setBar('ib-thr','ip-thr',S.thr);
+  setBar('ib-brk','ip-brk',S.brk);
+  setBar('ib-clt','ip-clt',S.clt);
+  setBar('ib-hbk','ip-hbk',S.hbk);
+
+  // G-force
+  renderGForce();
+
+  // Tires
+  [['fl','tFL','wFL'],['fr','tFR','wFR'],['rl','tRL','wRL'],['rr','tRR','wRR']].forEach(([k,tk,wk])=>{
+    const c=document.getElementById(`tc-${k}`);
+    const t=document.getElementById(`tt-${k}`);
+    const w=document.getElementById(`tw-${k}`);
+    if(c) c.style.background = tireColor(S[tk]);
+    if(t) t.textContent = Math.round(S[tk])+'°';
+    if(w) w.textContent = Math.round(S[wk])+'%';
+  });
+
+  // Lap
+  document.getElementById('lc').textContent = fmtLap(S.lap);
+
+  // Track
+  renderTrack();
+
+  // Shift lights
+  renderShiftLights();
+
+  // Suspension
+  renderSusp('sf-fl','sv-fl',S.sFL);
+  renderSusp('sf-fr','sv-fr',S.sFR);
+  renderSusp('sf-rl','sv-rl',S.sRL);
+  renderSusp('sf-rr','sv-rr',S.sRR);
+
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+
+// ═══════════════════════════════════════════════════════════
+//  SIZE BUTTONS
+// ═══════════════════════════════════════════════════════════
+document.querySelectorAll('.sz').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const wId = this.dataset.w;
+    const c = this.dataset.c;
+    const r = this.dataset.r;
+    const w = document.getElementById(wId);
+    if (!w) return;
+    w.className = w.className
+      .replace(/\bcol-\d+\b/g,'')
+      .replace(/\brow-\d+\b/g,'')
+      .trim();
+    w.classList.add(`col-${c}`, `row-${r}`);
+    document.querySelectorAll(`.sz[data-w="${wId}"]`).forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  DRAG RESIZE
+// ═══════════════════════════════════════════════════════════
+const ROW_H = 64 + 14; // row height + gap
+const clampI = (v,a,b) => Math.max(a,Math.min(b,v));
+
+document.querySelectorAll('.rh').forEach(rh => {
+  const widget = rh.closest('.widget');
+  let sx, sy, sc, sr;
+
+  rh.addEventListener('mousedown', e => {
+    e.preventDefault();
+    sx = e.clientX; sy = e.clientY;
+    const dash = document.getElementById('dash');
+    const dashRect = dash.getBoundingClientRect();
+    const colW = dashRect.width / 12;
+    const cm = widget.className.match(/col-(\d+)/);
+    const rm = widget.className.match(/row-(\d+)/);
+    sc = cm ? +cm[1] : 3;
+    sr = rm ? +rm[1] : 3;
+
+    const onMove = ev => {
+      const nc = clampI(sc + Math.round((ev.clientX-sx)/colW), 2, 12);
+      const nr = clampI(sr + Math.round((ev.clientY-sy)/ROW_H), 2, 8);
+      widget.className = widget.className.replace(/\bcol-\d+\b/g,'').replace(/\brow-\d+\b/g,'').trim();
+      widget.classList.add(`col-${nc}`,`row-${nr}`);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove',onMove);
+      document.removeEventListener('mouseup',onUp);
+    };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+//  EDIT MODE TOGGLE
+// ═══════════════════════════════════════════════════════════
+let editMode = false;
+document.getElementById('editBtn').addEventListener('click', function() {
+  editMode = !editMode;
+  document.body.classList.toggle('edit-mode', editMode);
+  this.textContent = editMode ? '✓ Save Layout' : '⊞ Edit Layout';
+  this.classList.toggle('edit-active', editMode);
+});
+</script>
+</body>
+</html>

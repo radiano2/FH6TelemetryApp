@@ -1,0 +1,47 @@
+<div class="susp-grid">
+    @foreach (var s in _corners)
+    {
+        <div class="susp-cell">
+            <div class="susp-lbl">@s.Label</div>
+            <div class="susp-track">
+                <div class="susp-fill" style="left:@s.Left;width:@s.Width;background:@s.Bg"></div>
+            </div>
+            <div class="susp-val">@s.ValStr</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private record Corner(string Label, string Left, string Width, string Bg, string ValStr);
+    private Corner[] _corners = [];
+
+    protected override void OnParametersSet()
+    {
+        var p = Packet;
+        _corners =
+        [
+            Make("Front Left",  p?.NormalizedSuspensionTravelFL),
+            Make("Front Right", p?.NormalizedSuspensionTravelFR),
+            Make("Rear Left",   p?.NormalizedSuspensionTravelRL),
+            Make("Rear Right",  p?.NormalizedSuspensionTravelRR),
+        ];
+    }
+
+    private static Corner Make(string label, float? v)
+    {
+        var val  = v ?? 0.5f;
+        var pct  = MathF.Abs(val - 0.5f) * 100f;
+        var mm   = (int)MathF.Round((val - 0.5f) * 42f);
+        var left = val >= 0.5f ? "50%" : I(val * 100f) + "%";
+        var bg   = val >= 0.5f
+            ? "linear-gradient(to right,var(--mint),var(--mint-light))"
+            : "linear-gradient(to left,var(--orange),#ffd080)";
+        var valStr = mm >= 0 ? $"+{mm} mm" : $"{mm} mm";
+        return new Corner(label, left, I(pct) + "%", bg, valStr);
+    }
+
+    private static string I(float v) =>
+        v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}

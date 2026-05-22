@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+
+## Rider / JetBrains
+.idea/
+
+## macOS
+.DS_Store
+
+## Claude Code local settings
+.claude/
+
+## Secrets / local overrides
+appsettings.Local.json

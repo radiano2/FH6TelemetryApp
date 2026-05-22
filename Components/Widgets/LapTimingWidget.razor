@@ -1,0 +1,51 @@
+<div class="lap-list">
+    <div class="lap-row">
+        <span class="lap-lbl">Current</span>
+        <span class="lap-val">@_current</span>
+    </div>
+    <div class="lap-row">
+        <span class="lap-lbl">Best</span>
+        <span class="lap-val pos">@_best</span>
+    </div>
+    <div class="lap-row">
+        <span class="lap-lbl">Last</span>
+        <span class="lap-val">@_last</span>
+    </div>
+    <div class="lap-row">
+        <span class="lap-lbl">&#916; Best</span>
+        <span class="lap-val @_deltaClass">@_delta</span>
+    </div>
+    <div class="lap-row">
+        <span class="lap-lbl">Sectors</span>
+        <span class="lap-val" style="font-size:0.9em">-- / -- / --</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private string _current    = "0:00.000";
+    private string _best       = "--:--.---";
+    private string _last       = "--:--.---";
+    private string _delta      = "--";
+    private string _deltaClass = "";
+
+    protected override void OnParametersSet()
+    {
+        var p = Packet;
+        _current = TelemetryUnits.FormatLapTime(p?.CurrentLap ?? 0f);
+        _best    = TelemetryUnits.FormatLapTime(p?.BestLap    ?? 0f);
+        _last    = TelemetryUnits.FormatLapTime(p?.LastLap    ?? 0f);
+
+        if (p is { CurrentLap: > 0, BestLap: > 0 })
+        {
+            var d = p.CurrentLap - p.BestLap;
+            _delta      = d >= 0 ? $"+{d:F3}" : $"{d:F3}";
+            _deltaClass = d >= 0 ? "neg" : "pos";
+        }
+        else
+        {
+            _delta = "--"; _deltaClass = "";
+        }
+    }
+}

@@ -1,0 +1,57 @@
+<div class="tires-grid">
+    @foreach (var t in _tires)
+    {
+        <div class="tire-cell" style="background:@t.Bg">
+            <div class="tire-lbl">@t.Corner</div>
+            <div class="tire-temp">@t.Temp</div>
+            <div class="tire-wear">@t.Wear</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet     { get; set; }
+    [Parameter] public bool             UseCelsius { get; set; }
+
+    private sealed class TireCell
+    {
+        public string Corner { get; init; } = "";
+        public string Bg     { get; init; } = "";
+        public string Temp   { get; init; } = "";
+        public string Wear   { get; init; } = "";
+    }
+
+    private TireCell[] _tires = [];
+
+    protected override void OnParametersSet()
+    {
+        var p = Packet;
+        _tires =
+        [
+            Build("FL", p?.TireTempFL, p?.WheelRotationSpeedFL),
+            Build("FR", p?.TireTempFR, p?.WheelRotationSpeedFR),
+            Build("RL", p?.TireTempRL, p?.WheelRotationSpeedRL),
+            Build("RR", p?.TireTempRR, p?.WheelRotationSpeedRR),
+        ];
+    }
+
+    private TireCell Build(string corner, float? tempF, float? wheelRps)
+    {
+        var tc   = TelemetryUnits.TireTempCelsius(tempF ?? 32f);
+        var bg   = HeatColor(tc);
+        var temp = UseCelsius ? $"{(int)tc}°C" : $"{(int)(tempF ?? 32f)}°F";
+        var wear = wheelRps.HasValue
+            ? $"{(int)Math.Clamp(MathF.Abs(wheelRps.Value) / 120f * 100f, 0f, 100f)}%"
+            : "0%";
+        return new TireCell { Corner = corner, Bg = bg, Temp = temp, Wear = wear };
+    }
+
+    private static string HeatColor(float tc)
+    {
+        if (tc < 65f)  return "#4a90d9";
+        if (tc < 78f)  return "#00b8a0";
+        if (tc < 95f)  return "#00c9a7";
+        if (tc < 112f) return "#ffa502";
+        return "#ff4757";
+    }
+}

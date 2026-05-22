@@ -1,0 +1,205 @@
+@inject SessionRepository SessionRepo
+@inject IJSRuntime JS
+@using System.Text.Json
+
+@if (_visible)
+{
+    <div class="diag-overlay" @onclick="Close">
+        <div class="diag-dialog" @onclick:stopPropagation="true">
+
+            <!-- Header -->
+            <div class="diag-header">
+                <div class="diag-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    Race Diagnostics
+                </div>
+                <div class="diag-tabs">
+                    <button class="diag-tab @(_tab == 0 ? "active" : "")" @onclick='() => _tab = 0'>Current Report</button>
+                    <button class="diag-tab @(_tab == 1 ? "active" : "")" @onclick="() => LoadHistory()">History</button>
+                </div>
+                <button class="diag-close" @onclick="Close">✕</button>
+            </div>
+
+            <!-- Tab 0: Current session report -->
+            @if (_tab == 0)
+            {
+                @if (_session is null)
+                {
+                    <div class="diag-empty">No session data yet. Start a session to begin recording.</div>
+                }
+                else
+                {
+                    <div class="diag-body">
+                        <!-- Session summary -->
+                        <div class="diag-summary">
+                            <div class="diag-stat">
+                                <span class="diag-stat-val">@_session.Laps.Count</span>
+                                <span class="diag-stat-lbl">Laps</span>
+                            </div>
+                            <div class="diag-stat">
+                                <span class="diag-stat-val">@FormatDuration(_session.Duration)</span>
+                                <span class="diag-stat-lbl">Duration</span>
+                            </div>
+                            <div class="diag-stat">
+                                <span class="diag-stat-val">@FormatLap(_session.BestLap)</span>
+                                <span class="diag-stat-lbl">Best Lap</span>
+                            </div>
+                            <div class="diag-stat">
+                                <span class="diag-stat-val">@_session.StartedAt.ToLocalTime().ToString("HH:mm")</span>
+                                <span class="diag-stat-lbl">Started</span>
+                            </div>
+                        </div>
+
+                        <!-- Advice cards -->
+                        @if (_session.Advice.Count == 0)
+                        {
+                            <div class="diag-empty" style="padding:24px 0">
+                                <span style="font-size:2em">✅</span>
+                                <div style="margin-top:8px;font-weight:700">No issues detected</div>
+                                <div style="color:var(--text-secondary);font-size:13px">Your setup looks well balanced for this session.</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="diag-advice-list">
+                                @foreach (var a in _session.Advice)
+                                {
+                                    <div class="diag-card sev-@a.Severity.ToString().ToLower()">
+                                        <div class="diag-card-top">
+                                            <span class="diag-sev-badge">@SevIcon(a.Severity) @a.Severity</span>
+                                            <span class="diag-cat">@a.Category</span>
+                                        </div>
+                                        <div class="diag-card-msg">@a.Message</div>
+                                        <div class="diag-card-hint">💡 @a.SliderHint</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="diag-footer">
+                        <button class="hbtn hbtn-ghost" @onclick="ExportJson">⬇ Export JSON</button>
+                        <button class="hbtn hbtn-primary" @onclick="Close">Close</button>
+                    </div>
+                }
+            }
+
+            <!-- Tab 1: History -->
+            @if (_tab == 1)
+            {
+                <div class="diag-body">
+                    @if (_history.Count == 0)
+                    {
+                        <div class="diag-empty">No past sessions found.</div>
+                    }
+                    else
+                    {
+                        <div class="diag-history-list">
+                            @foreach (var s in _history)
+                            {
+                                <div class="diag-history-row @(_session?.Id == s.Id ? "selected" : "")"
+                                     @onclick="() => SelectSession(s)">
+                                    <div>
+                                        <div class="diag-history-date">@s.StartedAt.ToLocalTime().ToString("dd MMM yyyy  HH:mm")</div>
+                                        <div class="diag-history-meta">@s.Laps.Count laps · @FormatDuration(s.Duration) · Best @FormatLap(s.BestLap)</div>
+                                    </div>
+                                    <div class="diag-history-badges">
+                                        @foreach (var sev in new[] { AdviceSeverity.Critical, AdviceSeverity.Warning, AdviceSeverity.Info })
+                                        {
+                                            var cnt = s.Advice.Count(a => a.Severity == sev);
+                                            if (cnt > 0)
+                                            {
+                                                <span class="diag-mini-badge sev-@sev.ToString().ToLower()">@SevIcon(sev) @cnt</span>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @if (_session is not null)
+                        {
+                            <div class="diag-advice-list" style="margin-top:16px">
+                                @foreach (var a in _session.Advice)
+                                {
+                                    <div class="diag-card sev-@a.Severity.ToString().ToLower()">
+                                        <div class="diag-card-top">
+                                            <span class="diag-sev-badge">@SevIcon(a.Severity) @a.Severity</span>
+                                            <span class="diag-cat">@a.Category</span>
+                                        </div>
+                                        <div class="diag-card-msg">@a.Message</div>
+                                        <div class="diag-card-hint">💡 @a.SliderHint</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="diag-footer">
+                    <button class="hbtn hbtn-primary" @onclick="Close">Close</button>
+                </div>
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    private bool          _visible = false;
+    private int           _tab     = 0;
+    private RaceSession?  _session;
+    private List<RaceSession> _history = [];
+
+    public void Show(RaceSession session)
+    {
+        _session = session;
+        _tab     = 0;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task ShowHistory()
+    {
+        await LoadHistory();
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private void Close() => _visible = false;
+
+    private async Task LoadHistory()
+    {
+        _tab     = 1;
+        _history = await SessionRepo.GetAllSessionsAsync();
+        StateHasChanged();
+    }
+
+    private void SelectSession(RaceSession s) => _session = s;
+
+    private async Task ExportJson()
+    {
+        if (_session is null) return;
+        var json = JsonSerializer.Serialize(_session, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"fh6-session-{_session.StartedAt:yyyy-MM-dd-HHmm}.json";
+        await JS.InvokeVoidAsync("downloadJson", fileName, json);
+    }
+
+    private static string FormatDuration(TimeSpan t) =>
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes:D2}m" : $"{t.Minutes}m {t.Seconds:D2}s";
+
+    private static string FormatLap(float sec)
+    {
+        if (sec <= 0f || sec == float.MaxValue) return "--:--.---";
+        var m  = (int)(sec / 60);
+        var s  = sec - m * 60;
+        return $"{m}:{s:00.000}";
+    }
+
+    private static string SevIcon(AdviceSeverity s) => s switch
+    {
+        AdviceSeverity.Critical => "🔴",
+        AdviceSeverity.Warning  => "🟡",
+        _                       => "🔵",
+    };
+}

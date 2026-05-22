@@ -1,0 +1,57 @@
+@* G-Force scatter plot with persisted trail (Phase 7).
+   Trail accumulates across renders using TimestampMS as a change gate. *@
+
+<div class="gf-wrap">
+    <svg viewBox="0 0 160 160" width="100%" style="max-width:148px;max-height:148px">
+        <circle cx="80" cy="80" r="70" fill="none" stroke="#edf2f7" stroke-width="1.5"/>
+        <circle cx="80" cy="80" r="46" fill="none" stroke="#edf2f7" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <circle cx="80" cy="80" r="23" fill="none" stroke="#edf2f7" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <line x1="10" y1="80" x2="150" y2="80" stroke="#edf2f7" stroke-width="1"/>
+        <line x1="80" y1="10" x2="80" y2="150" stroke="#edf2f7" stroke-width="1"/>
+        <text x="80" y="6"  text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#c5d0db">3G</text>
+        <text x="80" y="29" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#c5d0db">2G</text>
+        <text x="80" y="52" text-anchor="middle" font-family="Segoe UI,system-ui" font-size="8.5" fill="#c5d0db">1G</text>
+        @if (_trailPoints.Length > 0)
+        {
+            <polyline points="@_trailPoints" fill="none"
+                      stroke="rgba(0,201,167,0.25)" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+        }
+        <circle cx="@_dotX" cy="@_dotY" r="8" fill="var(--mint)" opacity="0.9"/>
+        <circle cx="@_dotX" cy="@_dotY" r="4" fill="white"/>
+    </svg>
+</div>
+
+@code {
+    [Parameter] public TelemetryPacket? Packet { get; set; }
+
+    private const int   TrailMax = 45;
+    private const float CX = 80f, CY = 80f, Scale = 23f;
+
+    private readonly List<(float x, float y)> _trail = [];
+    private uint   _lastTs = 0;
+    private string _dotX = "80", _dotY = "80";
+    private string _trailPoints = "";
+
+    protected override void OnParametersSet()
+    {
+        if (Packet is null || Packet.TimestampMS == _lastTs) return;
+        _lastTs = Packet.TimestampMS;
+
+        var gx = TelemetryUnits.AccelToG(Packet.AccelerationX);
+        var gz = TelemetryUnits.AccelToG(Packet.AccelerationZ);
+
+        var sx = Math.Clamp(CX + gx * Scale, 8f, 152f);
+        var sy = Math.Clamp(CY - gz * Scale, 8f, 152f);
+
+        _trail.Add((sx, sy));
+        if (_trail.Count > TrailMax) _trail.RemoveAt(0);
+
+        _dotX = I(sx);
+        _dotY = I(sy);
+        _trailPoints = string.Join(" ", _trail.Select(p => $"{I(p.x)},{I(p.y)}"));
+    }
+
+    private static string I(float v) =>
+        v.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+}
